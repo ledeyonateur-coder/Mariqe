@@ -7,10 +7,10 @@ export const config = {
     scrollHint: "SCROLL",
   },
   countdown: {
-    eyebrow: "Artisanat Francais upcycling de brocanteur }}", // ex. "PROCHAIN DROP"
+    eyebrow: "Artisanat Francais upcycling de brocanteur ", // ex. "PROCHAIN DROP"
     headline: "🌞 UN PEUX DE SOLEIL 🌞  ", // ex. "LA COLLECTION ARRIVE"
     previewCta: "Collection ci-dessous ",
-    revealTagline: "{{Upcycling Aveyronais }}", // ex. "Fait main. Modulable. Corse."
+    revealTagline: "Upcycling Aveyronais ", // ex. "Fait main. Modulable. Corse."
   },
   footer: {
     tagline: "Atelier de couture Privé à Villefranche-de-Rouergue.",
