@@ -1,4 +1,4 @@
-export const DROP_DATE = "2026-09-01T24:00:00+02:00";
+export const DROP_DATE = "2026-09-02T00:00:00+02:00";
 
 export const BRAND_NAME = "SOLEIL";
 
@@ -15,6 +15,7 @@ export const config = {
   footer: {
     tagline: "Atelier de couture Privé à Villefranche-de-Rouergue.",
     social: [
-      { label: "Instagram", href: "https://instagram.com/{{HANDLE}}" }, 
+      { label: "Instagram", href: "https://instagram.com/{{HANDLE}}" },
+    ],
   },
 };
