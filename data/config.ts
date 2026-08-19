@@ -7,13 +7,13 @@ export const config = {
     scrollHint: "SCROLL",
   },
   countdown: {
-    eyebrow: "{{Des vêtements qui ont déjà vécu une vie, et qui recommencent la tienne}}", // ex. "PROCHAIN DROP"
-    headline: "{{Artisanat Francais, upcycling intégral, fabrication 100%   }}", // ex. "LA COLLECTION ARRIVE"
-    previewCta: "Collection en dessous ",
+    eyebrow: "{{Artisanat Francais, upcycling intégral }}", // ex. "PROCHAIN DROP"
+    headline: "{{🌞 UN PEUX DE SOLEIL 🌞  }}", // ex. "LA COLLECTION ARRIVE"
+    previewCta: "Collection ci-dessous ",
     revealTagline: "{{Upcycling Aveyronais }}", // ex. "Fait main. Modulable. Corse."
   },
   footer: {
-    tagline: "Fait main / machine dans un atelier de couture a Villefranche-de-Rouergue.",
+    tagline: "Atelier de couture Privé à Villefranche-de-Rouergue.",
     social: [
       { label: "Instagram", href: "https://instagram.com/{{HANDLE}}" },
       { label: "TikTok", href: "https://tiktok.com/@{{HANDLE}}" },
