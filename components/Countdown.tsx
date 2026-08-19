@@ -136,7 +136,9 @@ export default function Countdown() {
             scale: stage === "counting" || stage === "flash" ? 1 : 0.85,
           }}
           transition={{ duration: 0.5, ease: EASE }}
-          className="absolute inset-0 flex flex-col items-center justify-center gap-8"
+          className={`absolute inset-0 flex flex-col items-center justify-center gap-8 ${
+            stage === "counting" || stage === "flash" ? "" : "pointer-events-none"
+          }`}
           aria-hidden={stage !== "counting" && stage !== "flash"}
         >
           <p className="font-display text-sm tracking-[0.35em] text-ink/80">{config.countdown.eyebrow}</p>
@@ -164,7 +166,7 @@ export default function Countdown() {
         </motion.div>
 
         <motion.div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-4"
+          className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4"
           initial={false}
           animate={{
             opacity: stage === "logo" ? 1 : 0,
