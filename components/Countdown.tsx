@@ -56,7 +56,7 @@ function CountUnit({ value, label, reducedMotion }: { value: number; label: stri
   const digits = pad(value).split("");
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="stitched-border flex bg-clay-brown/40 px-2 py-1 font-display text-4xl text-paper sm:text-5xl">
+      <div className="stitched-border flex bg-clay-brown/40 px-1.5 py-1 font-display text-2xl text-paper sm:text-3xl">
         {digits.map((digit, index) => (
           <FlipDigit key={index} value={digit} reducedMotion={reducedMotion} />
         ))}
@@ -144,13 +144,13 @@ export default function Countdown() {
             {config.countdown.headline}
           </h2>
 
-          <div className="flex items-end gap-3 sm:gap-4">
+          <div className="flex items-end gap-2 sm:gap-3">
             <CountUnit value={time?.days ?? 0} label="JOURS" reducedMotion={reducedMotion} />
-            <span className="pb-6 font-display text-3xl text-ink/60">:</span>
+            <span className="pb-4 font-display text-xl text-ink/60">:</span>
             <CountUnit value={time?.hours ?? 0} label="HEURES" reducedMotion={reducedMotion} />
-            <span className="pb-6 font-display text-3xl text-ink/60">:</span>
+            <span className="pb-4 font-display text-xl text-ink/60">:</span>
             <CountUnit value={time?.minutes ?? 0} label="MIN" reducedMotion={reducedMotion} />
-            <span className="pb-6 font-display text-3xl text-ink/60">:</span>
+            <span className="pb-4 font-display text-xl text-ink/60">:</span>
             <CountUnit value={time?.seconds ?? 0} label="SEC" reducedMotion={reducedMotion} />
           </div>
 
