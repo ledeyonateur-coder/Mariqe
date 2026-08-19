@@ -15,9 +15,6 @@ export const config = {
   footer: {
     tagline: "Atelier de couture Privé à Villefranche-de-Rouergue.",
     social: [
-      { label: "Instagram", href: "https://instagram.com/{{HANDLE}}" },
-      { label: "Mail ", href: " Sun.Fabriks@gmail.{ 
-      { label: "Facebook ",href: "https://facebook.com/{{HANDLE}}" },
-
+      { label: "Instagram", href: "https://instagram.com/{{HANDLE}}" }, 
   },
 };
