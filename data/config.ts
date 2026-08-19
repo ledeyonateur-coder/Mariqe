@@ -7,8 +7,8 @@ export const config = {
     scrollHint: "SCROLL",
   },
   countdown: {
-    eyebrow: "Artisanat Francais upcycling de brocanteur ", // ex. "PROCHAIN DROP"
-    headline: "🌞 UN PEUX DE SOLEIL 🌞  ", // ex. "LA COLLECTION ARRIVE"
+    eyebrow: "Artisanat 100% Francais upcycling est tissus de brocanteur ", // ex. "PROCHAIN DROP"
+    headline: " UN PEUX DE SOLEIL 🌞  ", // ex. "LA COLLECTION ARRIVE"
     previewCta: "Collection ci-dessous ",
     revealTagline: "Upcycling Aveyronais ", // ex. "Fait main. Modulable. Corse."
   },
