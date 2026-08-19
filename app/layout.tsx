@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo_Black, Inter } from "next/font/google";
 import "@/styles/globals.css";
+import { CartProvider } from "@/lib/cart";
+import PhoneFrame from "@/components/PhoneFrame";
+import CartWidget from "@/components/CartWidget";
 
 const displayFont = Archivo_Black({
   subsets: ["latin"],
@@ -39,7 +42,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" className={`${displayFont.variable} ${bodyFont.variable}`}>
-      <body>{children}</body>
+      <body>
+        <CartProvider>
+          <PhoneFrame>{children}</PhoneFrame>
+          <CartWidget />
+        </CartProvider>
+      </body>
     </html>
   );
 }
