@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200">
+  <rect width="900" height="1200" fill="#D98E7C"/>
+  <g opacity="0.15" stroke="#F6F2E9" stroke-width="3" stroke-dasharray="10 14">
+    <rect x="40" y="40" width="820" height="1120" fill="none"/>
+  </g>
+  <text x="450" y="600" font-family="sans-serif" font-size="42" fill="#F6F2E9" text-anchor="middle" opacity="0.85">PRODUIT 06 — VARIANTE</text>
+  <text x="450" y="650" font-family="sans-serif" font-size="20" fill="#F6F2E9" text-anchor="middle" opacity="0.6">visuel à venir</text>
+</svg>
