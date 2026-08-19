@@ -75,16 +75,6 @@ h3,
   border-radius: 0.375rem;
 }
 
-.scroll-snap-container {
-  scroll-snap-type: y mandatory;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.scroll-snap-item {
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
 
 /* Respect prefers-reduced-motion everywhere: kill non-essential motion */
 @media (prefers-reduced-motion: reduce) {
