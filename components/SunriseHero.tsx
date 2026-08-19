@@ -106,20 +106,12 @@ export default function SunriseHero() {
         style={{ opacity: reducedMotion ? 0.9 : 0.4, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
-      {/* Sun — illustration, cropped to just the sun (source image includes a wordmark below it) */}
+      {/* Sun */}
       <div
         ref={sunRef}
-        className="absolute left-1/2 top-[62%] h-36 w-36 -translate-x-1/2 overflow-hidden rounded-full drop-shadow-[0_0_45px_rgba(243,178,62,0.5)]"
+        className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)]"
         style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/hero/soleil-illustration.jpg"
-          alt=""
-          aria-hidden="true"
-          className="h-full w-full scale-[1.7] object-cover object-[50%_28%]"
-        />
-      </div>
+      />
 
       {/* Water reflection */}
       <div
