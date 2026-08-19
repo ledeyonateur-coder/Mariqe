@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Couchant / lever de soleil */
+  --sunset-gold: #f3b23e;
+  --sunset-coral: #ff6b3d;
+  --sunset-blush: #ffb37a;
+  --dawn-grey-blue: #8b96a8;
+  --night-navy: #12141c;
+
+  /* Textiles / patchwork */
+  --rust-orange: #c1531c;
+  --sage-green: #a9b98f;
+  --olive: #6e7a4b;
+  --mustard: #e3b123;
+  --denim-blue: #7e9bc0;
+  --cream-khaki: #e7dec4;
+  --clay-brown: #4a3524;
+  --dusty-pink: #d98e7c;
+
+  /* Pop punk-wave */
+  --pop-red: #d8432e;
+  --pop-blue: #3a7fb5;
+  --pop-green: #3f7a4c;
+
+  --paper: #f6f2e9;
+  --ink: #17140f;
+
+  --ease-signature: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--night-navy);
+  color: var(--ink);
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--sunset-coral);
+  color: var(--paper);
+}
+
+/* Grain texture overlay, used across the site for the DIY analogue feel */
+.grain-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: overlay;
+  opacity: 0.35;
+}
+
+/* Woven / stitched-label motif used on price tags & card borders */
+.stitched-border {
+  border: 1.5px dashed rgba(23, 20, 15, 0.35);
+  border-radius: 0.375rem;
+}
+
+.scroll-snap-container {
+  scroll-snap-type: y mandatory;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-snap-item {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Respect prefers-reduced-motion everywhere: kill non-essential motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--sunset-gold);
+  outline-offset: 2px;
+}
