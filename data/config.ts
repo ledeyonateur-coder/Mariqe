@@ -9,7 +9,7 @@ export const config = {
   countdown: {
     eyebrow: "Artisanat 100% Francais upcycling est tissus de brocanteur ", // ex. "PROCHAIN DROP"
     headline: " UN PEUX DE SOLEIL? 🌞  ", // ex. "LA COLLECTION ARRIVE"
-    previewCta: "Collection ci-dessous ",
+    previewCta: "AVANT LE PROCHAIN DROP    COLECTION CI-DESSOUS ",
     revealTagline: "Upcycling Aveyronais ", // ex. "Fait main. Modulable. Corse."
   },
   footer: {
