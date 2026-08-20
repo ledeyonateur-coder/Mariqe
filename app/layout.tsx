@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo_Black, Permanent_Marker, Inter } from "next/font/google";
+import { Archivo_Black, Bagel_Fat_One, Inter } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import "@/styles/globals.css";
 import { CartProvider } from "@/lib/cart";
 import PhoneFrame from "@/components/PhoneFrame";
 import CartWidget from "@/components/CartWidget";
+import SiteWordmark from "@/components/SiteWordmark";
 
 const displayFont = Archivo_Black({
   subsets: ["latin"],
@@ -20,7 +21,7 @@ const bodyFont = Inter({
   display: "swap",
 });
 
-const wordmarkFont = Permanent_Marker({
+const wordmarkFont = Bagel_Fat_One({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-wordmark",
@@ -53,6 +54,7 @@ export default function RootLayout({
       <body>
         <CartProvider>
           <PhoneFrame>{children}</PhoneFrame>
+          <SiteWordmark />
           <CartWidget />
         </CartProvider>
         <SpeedInsights />
