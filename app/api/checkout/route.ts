@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { products } from "@/data/products";
-import { isSoldOut as isPersistedSoldOut } from "@/lib/soldOutStore";
+import { getSoldQuantity } from "@/lib/stockStore";
 import { reserveForCheckout, releaseReservation } from "@/lib/checkoutLock";
 
 const ALLOWED_SHIPPING_COUNTRIES: Stripe.Checkout.SessionCreateParams.ShippingAddressCollection["allowed_countries"] =
@@ -40,18 +40,22 @@ export async function POST(request: NextRequest) {
 
   // Prices always come from the server-side catalog, never trust client-submitted amounts.
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+  const normalizedLines: { productId: string; quantity: number }[] = [];
   for (const line of body.lines) {
     const product = products.find((p) => p.id === line.productId);
     const quantity = Math.max(1, Math.min(20, Math.floor(line.quantity)));
     if (!product || !Number.isFinite(quantity)) {
       return NextResponse.json({ error: "Article invalide dans le panier." }, { status: 400 });
     }
-    if (product.soldOut || (await isPersistedSoldOut(product.id))) {
+    const soldQty = await getSoldQuantity(product.id);
+    const availableStock = Math.max(0, product.stock - soldQty);
+    if (availableStock < quantity) {
       return NextResponse.json(
-        { error: `"${product.name}" est une pièce unique déjà vendue — retire-la de ton panier.` },
+        { error: `"${product.name}" est épuisée — retire-la de ton panier.` },
         { status: 409 }
       );
     }
+    normalizedLines.push({ productId: product.id, quantity });
     lineItems.push({
       quantity,
       price_data: {
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest) {
   // Reserve every unique piece for the duration of the Checkout session so a
   // second buyer can't start paying for the same item in the meantime. If
   // any one of them is already reserved, roll back and reject the whole cart.
-  const productIds = body.lines.map((line) => line.productId);
+  const productIds = normalizedLines.map((line) => line.productId);
   const reserved: string[] = [];
   for (const productId of productIds) {
     if (!reserveForCheckout(productId)) {
@@ -98,7 +102,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         customer_name: body.customer.name,
         customer_phone: body.customer.phone ?? "",
-        product_ids: productIds.join(","),
+        lines: normalizedLines.map((line) => `${line.productId}:${line.quantity}`).join(","),
       },
       success_url: `${origin}/commande/succes?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/commande?cancelled=1`,

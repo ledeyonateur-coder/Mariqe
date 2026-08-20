@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import type { Product } from "@/data/products";
+import { isSoldOut, type Product } from "@/data/products";
 import { useCart } from "@/lib/cart";
 import { useReducedMotion } from "@/lib/scrollAnimations";
-import { useSoldOutOverrides, withLiveSoldOut } from "@/lib/soldOut";
+import { useStockOverrides, withLiveStock } from "@/lib/stock";
 
 const EASE = [0.65, 0, 0.35, 1] as const;
 
@@ -20,8 +20,9 @@ const ACCENT_BG: Record<Product["accent"], string> = {
 };
 
 export default function ProductDetail({ product: productProp, index }: { product: Product; index: number }) {
-  const soldOutOverrides = useSoldOutOverrides();
-  const product = withLiveSoldOut(productProp, soldOutOverrides);
+  const stockOverrides = useStockOverrides();
+  const product = withLiveStock(productProp, stockOverrides);
+  const soldOut = isSoldOut(product);
   const images = product.variantImages && product.variantImages.length > 0 ? product.variantImages : [product.image];
   const [variantIndex, setVariantIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -30,7 +31,7 @@ export default function ProductDetail({ product: productProp, index }: { product
   const { addItem, open } = useCart();
 
   function handleAddToCart() {
-    if (product.soldOut) return;
+    if (soldOut) return;
     addItem(product.id, quantity);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1500);
@@ -57,12 +58,12 @@ export default function ProductDetail({ product: productProp, index }: { product
         <img
           src={images[variantIndex]}
           alt={product.name}
-          className={`h-full w-full object-cover ${product.soldOut ? "grayscale" : ""}`}
+          className={`h-full w-full object-cover ${soldOut ? "grayscale" : ""}`}
           loading={index === 0 ? "eager" : "lazy"}
         />
-        {product.soldOut && (
+        {soldOut && (
           <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
-            <span className="stitched-border -rotate-6 bg-paper px-5 py-2 font-display text-base tracking-widest text-ink">
+            <span className="stitched-border -rotate-6 bg-paper px-5 py-2 font-wordmark text-base tracking-widest text-ink">
               ÉPUISÉ
             </span>
           </div>
@@ -92,14 +93,14 @@ export default function ProductDetail({ product: productProp, index }: { product
         <p className="font-body text-sm leading-relaxed text-ink/70">{product.description}</p>
         <span
           className={`stitched-border inline-flex w-fit items-center gap-1 px-3 py-1 font-display text-base text-ink ${
-            product.soldOut ? "bg-ink/10 text-ink/50 line-through" : ACCENT_BG[product.accent]
+            soldOut ? "bg-ink/10 text-ink/50 line-through" : ACCENT_BG[product.accent]
           }`}
         >
           {product.price} €
         </span>
       </div>
 
-      {product.soldOut ? (
+      {soldOut ? (
         <p className="font-body text-sm text-ink/60">
           Cette pièce unique a déjà trouvé preneur — elle ne sera pas reproduite.
         </p>
@@ -118,7 +119,7 @@ export default function ProductDetail({ product: productProp, index }: { product
             <span className="w-6 text-center font-display text-lg text-ink">{quantity}</span>
             <button
               type="button"
-              onClick={() => setQuantity((q) => q + 1)}
+              onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
               aria-label="Augmenter la quantité"
               className="stitched-border h-9 w-9 font-body text-lg text-ink"
             >
@@ -131,10 +132,10 @@ export default function ProductDetail({ product: productProp, index }: { product
       <button
         type="button"
         onClick={handleAddToCart}
-        disabled={product.soldOut}
+        disabled={soldOut}
         className="stitched-border mt-2 flex items-center justify-center bg-ink px-4 py-4 font-display text-sm text-paper transition-transform duration-300 ease-signature active:scale-95 disabled:cursor-not-allowed disabled:bg-ink/30 disabled:active:scale-100"
       >
-        {product.soldOut ? "Épuisé" : justAdded ? "Ajouté au panier ✓" : "Ajouter au panier"}
+        {soldOut ? <span className="font-wordmark">Épuisé</span> : justAdded ? "Ajouté au panier ✓" : "Ajouter au panier"}
       </button>
     </motion.article>
   );
