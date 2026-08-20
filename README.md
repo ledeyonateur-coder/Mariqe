@@ -1,4 +1,5 @@
-# Mariqe
+# soleil
+
 
 Site vitrine one-page pour la marque **Mariqe**, pensé exclusivement pour
 l'écran iPhone (mobile-first strict — le contenu reste centré dans un cadre
