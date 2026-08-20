@@ -32,7 +32,7 @@
 
   /* Desktop-only backdrop behind the card, shifted per-section by AmbientBackground
      so it harmonizes with whatever's currently showing instead of staying a flat navy. */
-  --ambient-bg: radial-gradient(ellipse at top, #1c2130 0%, #0a0b10 70%);
+  --ambient-bg: #12141c;
 }
 
 * {

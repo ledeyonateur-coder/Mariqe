@@ -42,7 +42,7 @@ export default function ProductWindow({ product, index }: { product: Product; in
 
   return (
     <motion.article
-      className="relative flex h-[100dvh] w-full flex-col items-center justify-center gap-6 px-6 py-16"
+      className="relative flex h-[100dvh] w-full flex-col items-center justify-center gap-4 px-6 py-12 lg:gap-5 lg:py-14"
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ amount: 0.5, once: false }}
@@ -54,7 +54,7 @@ export default function ProductWindow({ product, index }: { product: Product; in
 
       <Link href={`/produits/${product.id}`} className="flex flex-col items-center gap-6">
         <motion.div
-          className="relative aspect-[3/4] w-full max-w-[280px] cursor-pointer overflow-hidden rounded-2xl shadow-xl lg:max-w-[380px]"
+          className="relative aspect-[3/4] w-full max-w-[280px] cursor-pointer overflow-hidden rounded-2xl shadow-xl lg:max-w-[320px]"
           style={{
             rotateX: reducedMotion ? 0 : rotateX,
             rotateY: reducedMotion ? 0 : rotateY,
@@ -91,9 +91,9 @@ export default function ProductWindow({ product, index }: { product: Product; in
           )}
         </motion.div>
 
-        <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex flex-col items-center gap-2 text-center">
           <h3 className="font-display text-xl text-paper lg:text-2xl">{product.name}</h3>
-          <p className="max-w-[26ch] font-body text-sm text-paper/70 lg:max-w-[36ch] lg:text-base">{product.description}</p>
+          <p className="max-w-[26ch] font-body text-sm text-paper/70 lg:max-w-[36ch]">{product.description}</p>
           <span
             className={`stitched-border inline-flex items-center gap-1 px-3 py-1 font-display text-sm text-ink ${
               product.soldOut ? "bg-ink/20 text-paper/70 line-through" : ACCENT_BG[product.accent]

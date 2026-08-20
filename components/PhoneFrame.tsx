@@ -1,12 +1,12 @@
 export default function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
     <>
-      {/* Fixed to the viewport (not the page) so the radial glow always reads
-          near the top of the screen and tracks --ambient-bg as you scroll,
-          instead of fading to flat black once you're deep in a tall page. */}
+      {/* Fixed to the viewport (not the page) so the color always tracks
+          --ambient-bg as you scroll, instead of fading to flat black once
+          you're deep in a tall page. */}
       <div
-        className="fixed inset-0 -z-10 transition-[background] duration-700 ease-signature"
-        style={{ background: "var(--ambient-bg)" }}
+        className="fixed inset-0 -z-10 transition-[background-color] duration-300 ease-signature"
+        style={{ backgroundColor: "var(--ambient-bg)" }}
         aria-hidden="true"
       />
       <div
