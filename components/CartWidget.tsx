@@ -8,6 +8,7 @@ const EASE = [0.65, 0, 0.35, 1] as const;
 
 export default function CartWidget() {
   const { lines, totalCount, totalPrice, setQuantity, removeItem, isOpen, open, close } = useCart();
+  const hasSoldOutLine = lines.some((line) => line.product.soldOut);
 
   return (
     <>
@@ -83,7 +84,13 @@ export default function CartWidget() {
                         />
                         <div className="flex flex-1 flex-col gap-1">
                           <span className="font-body text-sm text-ink">{line.product.name}</span>
-                          <span className="font-body text-xs text-ink/60">{line.product.price} €</span>
+                          {line.product.soldOut ? (
+                            <span className="font-body text-xs text-pop-red">
+                              Épuisée — retire-la pour commander
+                            </span>
+                          ) : (
+                            <span className="font-body text-xs text-ink/60">{line.product.price} €</span>
+                          )}
                           <div className="mt-1 flex items-center gap-2">
                             <button
                               type="button"
@@ -126,13 +133,19 @@ export default function CartWidget() {
                     <span>Sous-total</span>
                     <span>{totalPrice.toFixed(0)} €</span>
                   </div>
-                  <Link
-                    href="/commande"
-                    onClick={close}
-                    className="stitched-border flex items-center justify-center bg-ink px-4 py-3 font-display text-sm text-paper transition-transform duration-300 ease-signature active:scale-95"
-                  >
-                    Passer commande
-                  </Link>
+                  {hasSoldOutLine ? (
+                    <span className="stitched-border flex cursor-not-allowed items-center justify-center bg-ink/30 px-4 py-3 font-display text-sm text-paper/70">
+                      Retire les pièces épuisées pour continuer
+                    </span>
+                  ) : (
+                    <Link
+                      href="/commande"
+                      onClick={close}
+                      className="stitched-border flex items-center justify-center bg-ink px-4 py-3 font-display text-sm text-paper transition-transform duration-300 ease-signature active:scale-95"
+                    >
+                      Passer commande
+                    </Link>
+                  )}
                 </div>
               )}
             </motion.div>

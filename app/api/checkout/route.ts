@@ -44,6 +44,12 @@ export async function POST(request: NextRequest) {
     if (!product || !Number.isFinite(quantity)) {
       return NextResponse.json({ error: "Article invalide dans le panier." }, { status: 400 });
     }
+    if (product.soldOut) {
+      return NextResponse.json(
+        { error: `"${product.name}" est une pièce unique déjà vendue — retire-la de ton panier.` },
+        { status: 409 }
+      );
+    }
     lineItems.push({
       quantity,
       price_data: {
