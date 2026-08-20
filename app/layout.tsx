@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo_Black, Fredoka, Inter } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "@/styles/globals.css";
 import { CartProvider } from "@/lib/cart";
 import PhoneFrame from "@/components/PhoneFrame";
@@ -26,9 +27,9 @@ const wordmarkFont = Fredoka({
 });
 
 export const metadata: Metadata = {
-  title: "Mariqe — La collection arrive",
+  title: "Soleil — La collection arrive",
   description:
-    "Mariqe — vêtements modulables faits main, esprit pacific punk wave. Lever de soleil, compte à rebours, collection à venir.",
+    "Soleil — vêtements modulables faits main, esprit pacific punk wave. Lever de soleil, compte à rebours, collection à venir.",
   icons: {
     icon: "/favicon.svg",
   },
@@ -53,6 +54,7 @@ export default function RootLayout({
           <PhoneFrame>{children}</PhoneFrame>
           <CartWidget />
         </CartProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
