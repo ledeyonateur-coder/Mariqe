@@ -88,7 +88,7 @@ export default function SunriseHero() {
   }, [reducedMotion]);
 
   return (
-    <div ref={wrapperRef} className={`relative w-full ${reducedMotion ? "h-[100dvh]" : "h-[250dvh]"}`}>
+    <div id="hero" ref={wrapperRef} className={`relative w-full ${reducedMotion ? "h-[100dvh]" : "h-[250dvh]"}`}>
     <section
       ref={sectionRef}
       className="sticky top-0 h-[100dvh] w-full overflow-hidden"
