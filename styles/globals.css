@@ -76,6 +76,29 @@ h3,
 }
 
 
+/* Moving water beneath the horizon in SunriseHero */
+@keyframes wave-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.wave-layer {
+  animation: wave-drift linear infinite;
+}
+
+.wave-layer-slow {
+  animation-duration: 14s;
+}
+
+.wave-layer-fast {
+  animation-duration: 9s;
+  animation-direction: reverse;
+}
+
 /* Respect prefers-reduced-motion everywhere: kill non-essential motion */
 @media (prefers-reduced-motion: reduce) {
   *,
