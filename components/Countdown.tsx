@@ -56,7 +56,7 @@ function CountUnit({ value, label, reducedMotion }: { value: number; label: stri
   const digits = pad(value).split("");
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="stitched-border flex bg-clay-brown/40 px-1.5 py-1 font-display text-2xl text-paper sm:text-3xl">
+      <div className="stitched-border flex bg-clay-brown/40 px-1.5 py-1 font-display text-2xl text-paper sm:text-3xl lg:text-4xl">
         {digits.map((digit, index) => (
           <FlipDigit key={index} value={digit} reducedMotion={reducedMotion} />
         ))}
@@ -170,16 +170,16 @@ export default function Countdown() {
           }`}
           aria-hidden={stage !== "counting" && stage !== "flash"}
         >
-          <p className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-rust-orange">
+          <p className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-rust-orange lg:text-xs">
             {config.countdown.eyebrow}
           </p>
 
-          <div className="flex max-w-xs flex-col gap-3">
-            <h2 className="whitespace-pre-line font-display text-xl leading-snug text-ink sm:text-2xl">
+          <div className="flex max-w-xs flex-col gap-3 lg:max-w-md">
+            <h2 className="whitespace-pre-line font-display text-xl leading-snug text-ink sm:text-2xl lg:text-3xl">
               {headlineMain}
             </h2>
             {headlineSub && (
-              <p className="whitespace-pre-line font-body text-sm italic leading-relaxed text-ink/70">
+              <p className="whitespace-pre-line font-body text-sm italic leading-relaxed text-ink/70 lg:text-base">
                 {headlineSub}
               </p>
             )}
@@ -195,9 +195,9 @@ export default function Countdown() {
             <CountUnit value={time?.seconds ?? 0} label="SEC" reducedMotion={reducedMotion} />
           </div>
 
-          <div className="flex max-w-xs flex-col items-center gap-3">
+          <div className="flex max-w-xs flex-col items-center gap-3 lg:max-w-md">
             {ctaBody && (
-              <p className="whitespace-pre-line font-body text-xs leading-relaxed text-ink/70">{ctaBody}</p>
+              <p className="whitespace-pre-line font-body text-xs leading-relaxed text-ink/70 lg:text-sm">{ctaBody}</p>
             )}
             <button
               type="button"

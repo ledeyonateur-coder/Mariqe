@@ -58,6 +58,7 @@ const config: Config = {
       },
       maxWidth: {
         phone: "430px",
+        "phone-lg": "640px",
       },
       spacing: {
         "safe-top": "env(safe-area-inset-top)",
