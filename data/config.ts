@@ -7,11 +7,12 @@ export const config = {
     scrollHint: "",
   },
   countdown: {
-    eyebrow: "Nous, c’est de l’artisanat 100% français. Pas de production en série, pas de gaspillage : on récupère des tissus chinés chez les brocanteurs, des matières qui ont déjà vécu, et on leur donne une seconde vie.", // ex. "PROCHAIN DROP"
-    headline: `Le concept est simple : 1 Drop = 1 Pièce unique. Ce que vous portez, personne d’autre ne l’a. Jamais.
+    eyebrow: "Le concept est simple :", // ex. "PROCHAIN DROP"
+    headline: ` 1 Drop = 1 Pièce unique. Ce que vous portez, personne d’autre ne l’a. Jamais.
 
 De l’upcycling, du savoir-faire français, et de l’authenticité à chaque couture. 🌞`, // ex. "LA COLLECTION ARRIVE"
-    previewCta: "AVANT LE PROCHAIN DROP    COLECTION CI-DESSOUS ",
+    previewCta: "Nous, c’est de l’artisanat 100% français. Pas de production en série, pas de gaspillage : on récupère des tissus chinés chez les brocanteurs, des matières qui ont déjà vécu, et on leur donne une seconde vie. 
+AVANT LE PROCHAIN DROP    COLECTION CI-DESSOUS ",
     revealTagline: "Upcycling Aveyronais ", // ex. "Fait main. Modulable. Corse."
   },
   footer: {
