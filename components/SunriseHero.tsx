@@ -67,7 +67,7 @@ export default function SunriseHero() {
         0
       ).to(
         waterRef.current,
-        { opacity: 0.8, ease: "none", duration: 1 },
+        { opacity: 0.95, ease: "none", duration: 1 },
         0
       ).to(
         hillFarRef.current,
@@ -135,12 +135,45 @@ export default function SunriseHero() {
         style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
-      {/* Water reflection */}
+      {/* Water — winding squiggle pattern, dégradé du ton montagne (haut) vers le bleu pervenche (bas) */}
       <div
         ref={waterRef}
-        className="absolute bottom-0 left-0 h-[30%] w-full bg-gradient-to-t from-sunset-gold/40 via-sunset-coral/20 to-transparent blur-md"
-        style={{ opacity: reducedMotion ? 0.8 : 0.15 }}
-      />
+        className="absolute bottom-0 left-0 h-[34%] w-full overflow-hidden"
+        style={{ opacity: reducedMotion ? 1 : 0.15 }}
+      >
+        <svg viewBox="0 0 430 260" preserveAspectRatio="none" className="h-full w-full">
+          <defs>
+            <linearGradient id="mtnToPeriwinkle" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#1c2130" />
+              <stop offset="100%" stopColor="#7E9BC0" />
+            </linearGradient>
+          </defs>
+          <rect width="430" height="260" fill="#F6F2E9" />
+          <path
+            d="M-20,55 Q60,15 140,55 T300,55 T460,55"
+            fill="none"
+            stroke="url(#mtnToPeriwinkle)"
+            strokeWidth="42"
+            strokeLinecap="round"
+          />
+          <path
+            d="M-20,130 Q75,170 155,120 T315,140 T475,110"
+            fill="none"
+            stroke="url(#mtnToPeriwinkle)"
+            strokeWidth="34"
+            strokeLinecap="round"
+          />
+          <path
+            d="M-20,205 Q65,165 145,215 T305,185 T465,225"
+            fill="none"
+            stroke="url(#mtnToPeriwinkle)"
+            strokeWidth="26"
+            strokeLinecap="round"
+          />
+          <circle cx="70" cy="95" r="16" fill="url(#mtnToPeriwinkle)" />
+          <circle cx="360" cy="175" r="12" fill="url(#mtnToPeriwinkle)" />
+        </svg>
+      </div>
 
       {/* Hills — far layer */}
       <div
