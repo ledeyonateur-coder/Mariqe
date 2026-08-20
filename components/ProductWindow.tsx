@@ -4,7 +4,6 @@ import Link from "next/link";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { Product } from "@/data/products";
 import { useReducedMotion } from "@/lib/scrollAnimations";
-import WavyFrame from "./WavyFrame";
 
 const EASE = [0.65, 0, 0.35, 1] as const;
 
@@ -54,37 +53,35 @@ export default function ProductWindow({ product, index }: { product: Product; in
       </span>
 
       <Link href={`/produits/${product.id}`} className="flex flex-col items-center gap-6">
-        <WavyFrame className="aspect-[3/4] w-full max-w-[280px]">
-          <motion.div
-            className="relative h-full w-full cursor-pointer overflow-hidden rounded-2xl shadow-xl"
-            style={{
-              rotateX: reducedMotion ? 0 : rotateX,
-              rotateY: reducedMotion ? 0 : rotateY,
-              transformPerspective: 800,
-            }}
-            onPointerMove={handlePointerMove}
-            onPointerLeave={handlePointerLeave}
-            whileTap={reducedMotion ? undefined : { scale: 0.97 }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={product.image}
-              alt={product.name}
-              className="h-full w-full object-cover"
-              loading={index === 0 ? "eager" : "lazy"}
+        <motion.div
+          className="relative aspect-[3/4] w-full max-w-[280px] cursor-pointer overflow-hidden rounded-2xl shadow-xl"
+          style={{
+            rotateX: reducedMotion ? 0 : rotateX,
+            rotateY: reducedMotion ? 0 : rotateY,
+            transformPerspective: 800,
+          }}
+          onPointerMove={handlePointerMove}
+          onPointerLeave={handlePointerLeave}
+          whileTap={reducedMotion ? undefined : { scale: 0.97 }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={product.image}
+            alt={product.name}
+            className="h-full w-full object-cover"
+            loading={index === 0 ? "eager" : "lazy"}
+          />
+          {!reducedMotion && (
+            <motion.div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
+              style={{ left: glossLeft }}
             />
-            {!reducedMotion && (
-              <motion.div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
-                style={{ left: glossLeft }}
-              />
-            )}
-            <span className="stitched-border absolute bottom-3 right-3 bg-paper/90 px-2 py-1 font-body text-[0.6rem] tracking-widest text-ink/70">
-              VOIR →
-            </span>
-          </motion.div>
-        </WavyFrame>
+          )}
+          <span className="stitched-border absolute bottom-3 right-3 bg-paper/90 px-2 py-1 font-body text-[0.6rem] tracking-widest text-ink/70">
+            VOIR →
+          </span>
+        </motion.div>
 
         <div className="flex flex-col items-center gap-3 text-center">
           <h3 className="font-display text-xl text-paper">{product.name}</h3>

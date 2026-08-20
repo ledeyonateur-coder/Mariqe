@@ -16,11 +16,7 @@ export const products: Product[] = [
     price: 180,
     description: "Veste en denim upcyclé, poches amovibles, patchs cousus main.",
     image: "/products/placeholder-01.svg",
-    variantImages: [
-      "/products/placeholder-01.svg",
-      "/products/placeholder-01-alt.svg",
-      "/products/placeholder-01-alt2.svg",
-    ],
+    variantImages: ["/products/placeholder-01.svg", "/products/placeholder-01-alt.svg"],
     accent: "rust",
   },
   {
@@ -29,11 +25,7 @@ export const products: Product[] = [
     price: 120,
     description: "Chemise à fleurs appliquées en feutrine, coupe ample.",
     image: "/products/placeholder-02.svg",
-    variantImages: [
-      "/products/placeholder-02.svg",
-      "/products/placeholder-02-alt.svg",
-      "/products/placeholder-02-alt2.svg",
-    ],
+    variantImages: ["/products/placeholder-02.svg"],
     accent: "dusty",
   },
   {
@@ -42,11 +34,7 @@ export const products: Product[] = [
     price: 140,
     description: "Gilet tricoté/crocheté main, coloris interchangeables.",
     image: "/products/placeholder-03.svg",
-    variantImages: [
-      "/products/placeholder-03.svg",
-      "/products/placeholder-03-alt.svg",
-      "/products/placeholder-03-alt2.svg",
-    ],
+    variantImages: ["/products/placeholder-03.svg", "/products/placeholder-03-alt.svg"],
     accent: "sage",
   },
   {
@@ -55,11 +43,7 @@ export const products: Product[] = [
     price: 90,
     description: "Short léger, taille élastique, poche planche.",
     image: "/products/placeholder-04.svg",
-    variantImages: [
-      "/products/placeholder-04.svg",
-      "/products/placeholder-04-alt.svg",
-      "/products/placeholder-04-alt2.svg",
-    ],
+    variantImages: ["/products/placeholder-04.svg"],
     accent: "denim",
   },
   {
@@ -68,11 +52,7 @@ export const products: Product[] = [
     price: 75,
     description: "Sac en chutes de tissu recyclées, bandoulière réglable.",
     image: "/products/placeholder-05.svg",
-    variantImages: [
-      "/products/placeholder-05.svg",
-      "/products/placeholder-05-alt.svg",
-      "/products/placeholder-05-alt2.svg",
-    ],
+    variantImages: ["/products/placeholder-05.svg", "/products/placeholder-05-alt.svg"],
     accent: "mustard",
   },
   {
@@ -81,11 +61,7 @@ export const products: Product[] = [
     price: 45,
     description: "Bob réversible, deux motifs patchwork en un.",
     image: "/products/placeholder-06.svg",
-    variantImages: [
-      "/products/placeholder-06.svg",
-      "/products/placeholder-06-alt.svg",
-      "/products/placeholder-06-alt2.svg",
-    ],
+    variantImages: ["/products/placeholder-06.svg", "/products/placeholder-06-alt.svg"],
     accent: "olive",
   },
 ];

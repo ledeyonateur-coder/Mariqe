@@ -118,7 +118,7 @@ export default function SunriseHero() {
       {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in lockstep with it */}
       <div
         ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-[2.6rem] text-denim-blue drop-shadow-sm"
+        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-[3.9rem] text-denim-blue drop-shadow-sm"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
