@@ -153,7 +153,7 @@ export default function Countdown() {
           aria-hidden={stage !== "counting" && stage !== "flash"}
         >
           <p className="font-display text-sm tracking-[0.35em] text-ink/80">{config.countdown.eyebrow}</p>
-          <h2 className="max-w-xs font-display text-2xl leading-tight text-ink sm:text-3xl">
+          <h2 className="max-w-xs whitespace-pre-line font-display text-2xl leading-tight text-ink sm:text-3xl">
             {config.countdown.headline}
           </h2>
 
