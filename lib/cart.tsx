@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { products, type Product } from "@/data/products";
+import { useSoldOutOverrides, withLiveSoldOut } from "@/lib/soldOut";
 
 export type CartLine = {
   productId: string;
@@ -47,6 +48,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [rawLines, setRawLines] = useState<CartLine[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const soldOutOverrides = useSoldOutOverrides();
 
   useEffect(() => {
     setRawLines(readStoredLines());
@@ -88,10 +90,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return rawLines
       .map((line) => {
         const product = products.find((p) => p.id === line.productId);
-        return product ? { ...line, product } : null;
+        return product ? { ...line, product: withLiveSoldOut(product, soldOutOverrides) } : null;
       })
       .filter((line): line is CartLineWithProduct => line !== null);
-  }, [rawLines]);
+  }, [rawLines, soldOutOverrides]);
 
   const totalCount = useMemo(() => lines.reduce((sum, line) => sum + line.quantity, 0), [lines]);
   const totalPrice = useMemo(

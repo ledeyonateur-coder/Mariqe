@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import type { Product } from "@/data/products";
 import { useCart } from "@/lib/cart";
 import { useReducedMotion } from "@/lib/scrollAnimations";
+import { useSoldOutOverrides, withLiveSoldOut } from "@/lib/soldOut";
 
 const EASE = [0.65, 0, 0.35, 1] as const;
 
@@ -18,7 +19,9 @@ const ACCENT_BG: Record<Product["accent"], string> = {
   olive: "bg-olive",
 };
 
-export default function ProductDetail({ product, index }: { product: Product; index: number }) {
+export default function ProductDetail({ product: productProp, index }: { product: Product; index: number }) {
+  const soldOutOverrides = useSoldOutOverrides();
+  const product = withLiveSoldOut(productProp, soldOutOverrides);
   const images = product.variantImages && product.variantImages.length > 0 ? product.variantImages : [product.image];
   const [variantIndex, setVariantIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
