@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo_Black, Fredoka, Inter } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 import "@/styles/globals.css";
 import { CartProvider } from "@/lib/cart";
 import PhoneFrame from "@/components/PhoneFrame";
@@ -55,6 +56,7 @@ export default function RootLayout({
           <CartWidget />
         </CartProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
