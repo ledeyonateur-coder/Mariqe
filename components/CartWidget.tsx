@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
+import { isSoldOut } from "@/data/products";
 import { useCart } from "@/lib/cart";
 
 const EASE = [0.65, 0, 0.35, 1] as const;
 
 export default function CartWidget() {
   const { lines, totalCount, totalPrice, setQuantity, removeItem, isOpen, open, close } = useCart();
-  const hasSoldOutLine = lines.some((line) => line.product.soldOut);
+  const hasSoldOutLine = lines.some((line) => isSoldOut(line.product));
 
   return (
     <>
@@ -84,8 +85,8 @@ export default function CartWidget() {
                         />
                         <div className="flex flex-1 flex-col gap-1">
                           <span className="font-body text-sm text-ink">{line.product.name}</span>
-                          {line.product.soldOut ? (
-                            <span className="font-body text-xs text-pop-red">
+                          {isSoldOut(line.product) ? (
+                            <span className="font-wordmark text-xs text-pop-red">
                               Épuisée — retire-la pour commander
                             </span>
                           ) : (
@@ -103,7 +104,7 @@ export default function CartWidget() {
                             <span className="w-4 text-center font-body text-sm text-ink">{line.quantity}</span>
                             <button
                               type="button"
-                              onClick={() => setQuantity(line.productId, line.quantity + 1)}
+                              onClick={() => setQuantity(line.productId, Math.min(line.product.stock, line.quantity + 1))}
                               aria-label="Augmenter la quantité"
                               className="stitched-border h-6 w-6 font-body text-sm text-ink"
                             >

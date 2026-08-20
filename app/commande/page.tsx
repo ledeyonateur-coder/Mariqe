@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { isSoldOut } from "@/data/products";
 import { useCart } from "@/lib/cart";
 
 export default function CheckoutPage() {
@@ -15,7 +16,7 @@ export default function CheckoutPage() {
 
 function CheckoutForm() {
   const { lines, totalPrice, removeItem } = useCart();
-  const hasSoldOutLine = lines.some((line) => line.product.soldOut);
+  const hasSoldOutLine = lines.some((line) => isSoldOut(line.product));
   const searchParams = useSearchParams();
   const wasCancelled = searchParams.get("cancelled") === "1";
 
@@ -89,9 +90,9 @@ function CheckoutForm() {
       <ul className="flex flex-col gap-3 border-b border-dashed border-ink/20 pb-4">
         {lines.map((line) => (
           <li key={line.productId} className="flex items-center justify-between font-body text-sm text-ink">
-            {line.product.soldOut ? (
+            {isSoldOut(line.product) ? (
               <>
-                <span className="text-pop-red">
+                <span className="font-wordmark text-pop-red">
                   {line.product.name} — épuisée
                 </span>
                 <button

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { markSoldOut } from "@/lib/soldOutStore";
+import { addSoldQuantity } from "@/lib/stockStore";
 
 export async function POST(request: NextRequest) {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -28,8 +28,15 @@ export async function POST(request: NextRequest) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const productIds = session.metadata?.product_ids?.split(",").filter(Boolean) ?? [];
-    await Promise.all(productIds.map((id) => markSoldOut(id)));
+    const lineMetadata = session.metadata?.lines?.split(",").filter(Boolean) ?? [];
+    await Promise.all(
+      lineMetadata.map((entry) => {
+        const [productId, quantityRaw] = entry.split(":");
+        const quantity = Number(quantityRaw) || 0;
+        if (!productId || quantity <= 0) return Promise.resolve();
+        return addSoldQuantity(productId, quantity);
+      })
+    );
   }
 
   return NextResponse.json({ received: true });

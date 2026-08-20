@@ -6,10 +6,16 @@ export type Product = {
   image: string; // chemin vers /public/products/...
   variantImages?: string[]; // pour l'aspect "modulable"
   accent: "rust" | "sage" | "mustard" | "denim" | "dusty" | "olive";
-  // Chaque pièce est unique (1 Drop = 1 Pièce) : passe à true dès qu'elle est vendue
-  // pour la retirer de la vente. À faire manuellement, pas de suivi de stock automatique.
-  soldOut?: boolean;
+  // Nombre d'exemplaires disponibles. Chaque pièce étant unique (1 Drop = 1
+  // Pièce), c'est presque toujours 0 ou 1. Décrémenté automatiquement dès
+  // qu'un paiement Stripe est confirmé (voir lib/stockStore.ts) — modifier
+  // cette valeur à la main ne sert qu'à retirer une pièce manuellement.
+  stock: number;
 };
+
+export function isSoldOut(product: Pick<Product, "stock">): boolean {
+  return product.stock <= 0;
+}
 
 // 6 entrées placeholders — à remplacer par les vrais visuels/prix du drop.
 export const products: Product[] = [
@@ -21,6 +27,7 @@ export const products: Product[] = [
     image: "/products/placeholder-01.svg",
     variantImages: ["/products/placeholder-01.svg", "/products/placeholder-01-alt.svg"],
     accent: "rust",
+    stock: 1,
   },
   {
     id: "chemise-fleurs-02",
@@ -30,6 +37,7 @@ export const products: Product[] = [
     image: "/products/placeholder-02.svg",
     variantImages: ["/products/placeholder-02.svg"],
     accent: "dusty",
+    stock: 1,
   },
   {
     id: "gilet-tisse-03",
@@ -39,6 +47,7 @@ export const products: Product[] = [
     image: "/products/placeholder-03.svg",
     variantImages: ["/products/placeholder-03.svg", "/products/placeholder-03-alt.svg"],
     accent: "sage",
+    stock: 1,
   },
   {
     id: "short-surf-04",
@@ -48,6 +57,7 @@ export const products: Product[] = [
     image: "/products/placeholder-04.svg",
     variantImages: ["/products/placeholder-04.svg"],
     accent: "denim",
+    stock: 1,
   },
   {
     id: "sac-atelier-05",
@@ -57,6 +67,7 @@ export const products: Product[] = [
     image: "/products/placeholder-05.svg",
     variantImages: ["/products/placeholder-05.svg", "/products/placeholder-05-alt.svg"],
     accent: "mustard",
+    stock: 1,
   },
   {
     id: "bob-brut-06",
@@ -66,5 +77,6 @@ export const products: Product[] = [
     image: "/products/placeholder-06.svg",
     variantImages: ["/products/placeholder-06.svg", "/products/placeholder-06-alt.svg"],
     accent: "olive",
+    stock: 1,
   },
 ];

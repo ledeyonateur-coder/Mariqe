@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { products } from "@/data/products";
-import { useSoldOutOverrides, withLiveSoldOut } from "@/lib/soldOut";
+import { useStockOverrides, withLiveStock } from "@/lib/stock";
 import ProductWindow from "./ProductWindow";
 
 export default function ProductShowcase() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const soldOutOverrides = useSoldOutOverrides();
+  const stockOverrides = useStockOverrides();
 
   useEffect(() => {
     const container = containerRef.current;
@@ -42,7 +42,7 @@ export default function ProductShowcase() {
       >
         {products.map((product, index) => (
           <div key={product.id} className="h-full w-full flex-shrink-0 snap-start [scroll-snap-stop:always]">
-            <ProductWindow product={withLiveSoldOut(product, soldOutOverrides)} index={index} />
+            <ProductWindow product={withLiveStock(product, stockOverrides)} index={index} />
           </div>
         ))}
       </div>

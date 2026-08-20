@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import type { Product } from "@/data/products";
+import { isSoldOut, type Product } from "@/data/products";
 import { useReducedMotion } from "@/lib/scrollAnimations";
 
 const EASE = [0.65, 0, 0.35, 1] as const;
@@ -18,6 +18,7 @@ const ACCENT_BG: Record<Product["accent"], string> = {
 
 export default function ProductWindow({ product, index }: { product: Product; index: number }) {
   const reducedMotion = useReducedMotion();
+  const soldOut = isSoldOut(product);
 
   const rotateXRaw = useMotionValue(0);
   const rotateYRaw = useMotionValue(0);
@@ -68,19 +69,19 @@ export default function ProductWindow({ product, index }: { product: Product; in
           <img
             src={product.image}
             alt={product.name}
-            className={`h-full w-full object-cover ${product.soldOut ? "grayscale" : ""}`}
+            className={`h-full w-full object-cover ${soldOut ? "grayscale" : ""}`}
             loading={index === 0 ? "eager" : "lazy"}
           />
-          {!reducedMotion && !product.soldOut && (
+          {!reducedMotion && !soldOut && (
             <motion.div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
               style={{ left: glossLeft }}
             />
           )}
-          {product.soldOut ? (
+          {soldOut ? (
             <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
-              <span className="stitched-border -rotate-6 bg-paper px-4 py-1.5 font-display text-sm tracking-widest text-ink">
+              <span className="stitched-border -rotate-6 bg-paper px-4 py-1.5 font-wordmark text-sm tracking-widest text-ink">
                 ÉPUISÉ
               </span>
             </div>
@@ -96,7 +97,7 @@ export default function ProductWindow({ product, index }: { product: Product; in
           <p className="max-w-[26ch] font-body text-sm text-paper/70 lg:max-w-[36ch]">{product.description}</p>
           <span
             className={`stitched-border inline-flex items-center gap-1 px-3 py-1 font-display text-sm text-ink ${
-              product.soldOut ? "bg-ink/20 text-paper/70 line-through" : ACCENT_BG[product.accent]
+              soldOut ? "bg-ink/20 text-paper/70 line-through" : ACCENT_BG[product.accent]
             }`}
           >
             {product.price} €
