@@ -18,7 +18,6 @@ export default function SunriseHero() {
   const sectionRef = useRef<HTMLElement>(null);
   const skyRefs = useRef<Array<HTMLDivElement | null>>([]);
   const sunRef = useRef<HTMLDivElement>(null);
-  const wordmarkRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const waterRef = useRef<HTMLDivElement>(null);
   const hillFarRef = useRef<HTMLDivElement>(null);
@@ -53,14 +52,6 @@ export default function SunriseHero() {
         sunRef.current,
         { yPercent: -170, ease: "none", duration: 1 },
         0
-      ).to(
-        wordmarkRef.current,
-        { yPercent: -170, ease: "none", duration: 1 },
-        0
-      ).to(
-        wordmarkRef.current,
-        { opacity: 1, ease: "none", duration: 0.12 },
-        0.5
       ).to(
         glowRef.current,
         { yPercent: -170, opacity: 0.9, ease: "none", duration: 1 },
@@ -115,25 +106,15 @@ export default function SunriseHero() {
         style={{ opacity: reducedMotion ? 0.9 : 0.4, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
-      {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in lockstep with it */}
-      <div
-        ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-[3.9rem] text-denim-blue drop-shadow-sm"
-        style={{
-          opacity: reducedMotion ? 1 : 0,
-          transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
-        }}
-        aria-hidden="true"
-      >
-        Soleil
-      </div>
-
-      {/* Sun */}
+      {/* Sun — replaced by the brush-painted "SOLEIL" wordmark, in the sun's position and rising with scroll */}
       <div
         ref={sunRef}
-        className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)]"
+        className="pointer-events-none absolute left-1/2 top-[62%] -translate-x-1/2 whitespace-nowrap font-wordmark text-6xl text-[#1E3A8A] drop-shadow-sm sm:text-7xl"
         style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
-      />
+        aria-hidden="true"
+      >
+        SOLEIL
+      </div>
 
       {/* Water reflection */}
       <div

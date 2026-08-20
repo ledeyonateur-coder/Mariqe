@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo_Black, Fredoka, Inter } from "next/font/google";
+import { Archivo_Black, Permanent_Marker, Inter } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import "@/styles/globals.css";
@@ -20,9 +20,9 @@ const bodyFont = Inter({
   display: "swap",
 });
 
-const wordmarkFont = Fredoka({
+const wordmarkFont = Permanent_Marker({
   subsets: ["latin"],
-  weight: "600",
+  weight: "400",
   variable: "--font-wordmark",
   display: "swap",
 });
