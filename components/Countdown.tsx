@@ -68,6 +68,21 @@ function CountUnit({ value, label, reducedMotion }: { value: number; label: stri
 
 type RevealStage = "counting" | "flash" | "dissolve" | "logo";
 
+// The headline is a short manifesto line followed by an optional lighter
+// supporting sentence; the CTA is a short description followed by the
+// actual clickable label. Both are split on blank/newlines so the data
+// file keeps plain text while the render gets an editorial hierarchy.
+function splitParagraphs(text: string): [string, string] {
+  const [first, ...rest] = text.trim().split(/\n{2,}/);
+  return [first?.trim() ?? "", rest.join(" ").trim()];
+}
+
+function splitCta(text: string): [string, string] {
+  const lines = text.trim().split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) return ["", lines[0] ?? text.trim()];
+  return [lines.slice(0, -1).join(" "), lines[lines.length - 1]];
+}
+
 export default function Countdown() {
   const target = useMemo(() => new Date(DROP_DATE).getTime(), []);
   const reducedMotion = useReducedMotion();
@@ -108,6 +123,9 @@ export default function Countdown() {
   const handleSkip = () => {
     document.getElementById("collection")?.scrollIntoView({ behavior: "smooth" });
   };
+
+  const [headlineMain, headlineSub] = splitParagraphs(config.countdown.headline);
+  const [ctaBody, ctaLabel] = splitCta(config.countdown.previewCta);
 
   return (
     <section
@@ -152,10 +170,20 @@ export default function Countdown() {
           }`}
           aria-hidden={stage !== "counting" && stage !== "flash"}
         >
-          <p className="font-display text-sm tracking-[0.35em] text-ink/80">{config.countdown.eyebrow}</p>
-          <h2 className="max-w-xs whitespace-pre-line font-display text-2xl leading-tight text-ink sm:text-3xl">
-            {config.countdown.headline}
-          </h2>
+          <p className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-rust-orange">
+            {config.countdown.eyebrow}
+          </p>
+
+          <div className="flex max-w-xs flex-col gap-3">
+            <h2 className="whitespace-pre-line font-display text-xl leading-snug text-ink sm:text-2xl">
+              {headlineMain}
+            </h2>
+            {headlineSub && (
+              <p className="whitespace-pre-line font-body text-sm italic leading-relaxed text-ink/70">
+                {headlineSub}
+              </p>
+            )}
+          </div>
 
           <div className="flex items-end gap-2 sm:gap-3">
             <CountUnit value={time?.days ?? 0} label="JOURS" reducedMotion={reducedMotion} />
@@ -167,13 +195,18 @@ export default function Countdown() {
             <CountUnit value={time?.seconds ?? 0} label="SEC" reducedMotion={reducedMotion} />
           </div>
 
-          <button
-            type="button"
-            onClick={handleSkip}
-            className="max-w-xs whitespace-pre-line font-body text-sm underline decoration-dashed underline-offset-4 text-ink/70 transition-colors duration-300 ease-signature hover:text-ink"
-          >
-            {config.countdown.previewCta}
-          </button>
+          <div className="flex max-w-xs flex-col items-center gap-3">
+            {ctaBody && (
+              <p className="whitespace-pre-line font-body text-xs leading-relaxed text-ink/70">{ctaBody}</p>
+            )}
+            <button
+              type="button"
+              onClick={handleSkip}
+              className="font-display text-xs font-semibold uppercase tracking-[0.15em] underline decoration-dashed underline-offset-4 text-ink transition-colors duration-300 ease-signature hover:text-rust-orange"
+            >
+              {ctaLabel}
+            </button>
+          </div>
         </motion.div>
 
         <motion.div
