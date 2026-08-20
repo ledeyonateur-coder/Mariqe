@@ -67,8 +67,8 @@ export default function SunriseHero() {
         0
       ).to(
         waterRef.current,
-        { opacity: 0.8, ease: "none", duration: 1 },
-        0
+        { opacity: 0.85, ease: "none", duration: 0.12 },
+        0.65
       ).to(
         hillFarRef.current,
         { yPercent: -4, ease: "none", duration: 1 },
@@ -118,7 +118,7 @@ export default function SunriseHero() {
       {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in lockstep with it */}
       <div
         ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-4xl text-denim-blue drop-shadow-sm"
+        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-[2.6rem] text-denim-blue drop-shadow-sm"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
@@ -135,12 +135,32 @@ export default function SunriseHero() {
         style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
-      {/* Water reflection */}
+      {/* Water — same dark tones as the hills, revealed with a moving-waves animation at 65% of the rise */}
       <div
         ref={waterRef}
-        className="absolute bottom-0 left-0 h-[30%] w-full bg-gradient-to-t from-sunset-gold/40 via-sunset-coral/20 to-transparent blur-md"
-        style={{ opacity: reducedMotion ? 0.8 : 0.15 }}
-      />
+        className="absolute bottom-0 left-0 h-[30%] w-full overflow-hidden"
+        style={{ opacity: reducedMotion ? 1 : 0 }}
+      >
+        <div className="absolute inset-0 bg-night-navy" />
+        <svg
+          className="wave-layer wave-layer-slow absolute bottom-0 left-0 h-[70%] w-[200%]"
+          viewBox="0 0 860 70"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M0,35 Q107.5,15 215,35 T430,35 T645,35 T860,35 V70 H0 Z"
+            fill="#1c2130"
+            opacity="0.85"
+          />
+        </svg>
+        <svg
+          className="wave-layer wave-layer-fast absolute bottom-0 left-0 h-[45%] w-[200%]"
+          viewBox="0 0 860 45"
+          preserveAspectRatio="none"
+        >
+          <path d="M0,22 Q107.5,5 215,22 T430,22 T645,22 T860,22 V45 H0 Z" fill="#12141C" />
+        </svg>
+      </div>
 
       {/* Hills — far layer */}
       <div
