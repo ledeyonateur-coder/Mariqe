@@ -111,14 +111,14 @@ export default function SunriseHero() {
       {/* Sun glow */}
       <div
         ref={glowRef}
-        className="absolute left-1/2 top-[62%] h-40 w-40 -translate-x-1/2 rounded-full bg-sunset-gold blur-3xl"
+        className="absolute left-1/2 top-[62%] h-40 w-40 -translate-x-1/2 rounded-full bg-sunset-gold blur-3xl lg:h-56 lg:w-56"
         style={{ opacity: reducedMotion ? 0.9 : 0.4, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
       {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in lockstep with it */}
       <div
         ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-6xl text-[#1E3A8A] drop-shadow-sm sm:text-7xl"
+        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-6xl text-[#1E3A8A] drop-shadow-sm sm:text-7xl lg:text-8xl"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
@@ -131,7 +131,7 @@ export default function SunriseHero() {
       {/* Sun */}
       <div
         ref={sunRef}
-        className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)]"
+        className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)] lg:h-36 lg:w-36"
         style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 

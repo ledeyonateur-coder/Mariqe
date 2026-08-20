@@ -3,8 +3,8 @@ import { BRAND_NAME, config } from "@/data/config";
 export default function Footer() {
   return (
     <footer className="flex w-full flex-col items-center gap-4 bg-night-navy px-6 py-12 text-center">
-      <span className="font-display text-lg tracking-widest text-paper">{BRAND_NAME}</span>
-      <p className="max-w-[28ch] font-body text-xs text-paper/60">{config.footer.tagline}</p>
+      <span className="font-display text-lg tracking-widest text-paper lg:text-xl">{BRAND_NAME}</span>
+      <p className="max-w-[28ch] font-body text-xs text-paper/60 lg:max-w-[40ch] lg:text-sm">{config.footer.tagline}</p>
       <nav className="flex gap-6" aria-label="Réseaux sociaux">
         {config.footer.social.map((link) => (
           <a
