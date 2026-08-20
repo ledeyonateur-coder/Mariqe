@@ -27,6 +27,7 @@ export default function ProductDetail({ product, index }: { product: Product; in
   const { addItem, open } = useCart();
 
   function handleAddToCart() {
+    if (product.soldOut) return;
     addItem(product.id, quantity);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1500);
@@ -53,9 +54,16 @@ export default function ProductDetail({ product, index }: { product: Product; in
         <img
           src={images[variantIndex]}
           alt={product.name}
-          className="h-full w-full object-cover"
+          className={`h-full w-full object-cover ${product.soldOut ? "grayscale" : ""}`}
           loading={index === 0 ? "eager" : "lazy"}
         />
+        {product.soldOut && (
+          <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
+            <span className="stitched-border -rotate-6 bg-paper px-5 py-2 font-display text-base tracking-widest text-ink">
+              ÉPUISÉ
+            </span>
+          </div>
+        )}
       </div>
 
       {images.length > 1 && (
@@ -80,41 +88,50 @@ export default function ProductDetail({ product, index }: { product: Product; in
         <h1 className="font-display text-2xl text-ink">{product.name}</h1>
         <p className="font-body text-sm leading-relaxed text-ink/70">{product.description}</p>
         <span
-          className={`stitched-border inline-flex w-fit items-center gap-1 px-3 py-1 font-display text-base text-ink ${ACCENT_BG[product.accent]}`}
+          className={`stitched-border inline-flex w-fit items-center gap-1 px-3 py-1 font-display text-base text-ink ${
+            product.soldOut ? "bg-ink/10 text-ink/50 line-through" : ACCENT_BG[product.accent]
+          }`}
         >
           {product.price} €
         </span>
       </div>
 
-      <div className="flex items-center gap-4">
-        <span className="font-body text-sm text-ink/70">Quantité</span>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-            aria-label="Diminuer la quantité"
-            className="stitched-border h-9 w-9 font-body text-lg text-ink"
-          >
-            −
-          </button>
-          <span className="w-6 text-center font-display text-lg text-ink">{quantity}</span>
-          <button
-            type="button"
-            onClick={() => setQuantity((q) => q + 1)}
-            aria-label="Augmenter la quantité"
-            className="stitched-border h-9 w-9 font-body text-lg text-ink"
-          >
-            +
-          </button>
+      {product.soldOut ? (
+        <p className="font-body text-sm text-ink/60">
+          Cette pièce unique a déjà trouvé preneur — elle ne sera pas reproduite.
+        </p>
+      ) : (
+        <div className="flex items-center gap-4">
+          <span className="font-body text-sm text-ink/70">Quantité</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              aria-label="Diminuer la quantité"
+              className="stitched-border h-9 w-9 font-body text-lg text-ink"
+            >
+              −
+            </button>
+            <span className="w-6 text-center font-display text-lg text-ink">{quantity}</span>
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => q + 1)}
+              aria-label="Augmenter la quantité"
+              className="stitched-border h-9 w-9 font-body text-lg text-ink"
+            >
+              +
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <button
         type="button"
         onClick={handleAddToCart}
-        className="stitched-border mt-2 flex items-center justify-center bg-ink px-4 py-4 font-display text-sm text-paper transition-transform duration-300 ease-signature active:scale-95"
+        disabled={product.soldOut}
+        className="stitched-border mt-2 flex items-center justify-center bg-ink px-4 py-4 font-display text-sm text-paper transition-transform duration-300 ease-signature active:scale-95 disabled:cursor-not-allowed disabled:bg-ink/30 disabled:active:scale-100"
       >
-        {justAdded ? "Ajouté au panier ✓" : "Ajouter au panier"}
+        {product.soldOut ? "Épuisé" : justAdded ? "Ajouté au panier ✓" : "Ajouter au panier"}
       </button>
     </motion.article>
   );

@@ -14,7 +14,8 @@ export default function CheckoutPage() {
 }
 
 function CheckoutForm() {
-  const { lines, totalPrice } = useCart();
+  const { lines, totalPrice, removeItem } = useCart();
+  const hasSoldOutLine = lines.some((line) => line.product.soldOut);
   const searchParams = useSearchParams();
   const wasCancelled = searchParams.get("cancelled") === "1";
 
@@ -88,10 +89,27 @@ function CheckoutForm() {
       <ul className="flex flex-col gap-3 border-b border-dashed border-ink/20 pb-4">
         {lines.map((line) => (
           <li key={line.productId} className="flex items-center justify-between font-body text-sm text-ink">
-            <span>
-              {line.product.name} × {line.quantity}
-            </span>
-            <span>{(line.product.price * line.quantity).toFixed(0)} €</span>
+            {line.product.soldOut ? (
+              <>
+                <span className="text-pop-red">
+                  {line.product.name} — épuisée
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeItem(line.productId)}
+                  className="font-body text-xs underline decoration-dashed underline-offset-4 text-ink/60"
+                >
+                  Retirer
+                </button>
+              </>
+            ) : (
+              <>
+                <span>
+                  {line.product.name} × {line.quantity}
+                </span>
+                <span>{(line.product.price * line.quantity).toFixed(0)} €</span>
+              </>
+            )}
           </li>
         ))}
       </ul>
@@ -141,10 +159,14 @@ function CheckoutForm() {
 
         <button
           type="submit"
-          disabled={isSubmitting}
-          className="stitched-border mt-2 flex items-center justify-center bg-ink px-4 py-4 font-display text-sm text-paper transition-transform duration-300 ease-signature active:scale-95 disabled:opacity-60"
+          disabled={isSubmitting || hasSoldOutLine}
+          className="stitched-border mt-2 flex items-center justify-center bg-ink px-4 py-4 font-display text-sm text-paper transition-transform duration-300 ease-signature active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSubmitting ? "Redirection..." : "Payer en toute sécurité"}
+          {hasSoldOutLine
+            ? "Retire les pièces épuisées pour continuer"
+            : isSubmitting
+              ? "Redirection..."
+              : "Payer en toute sécurité"}
         </button>
 
         <div className="flex items-center justify-center gap-2 font-body text-xs text-ink/60">

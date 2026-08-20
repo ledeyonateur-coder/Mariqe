@@ -68,26 +68,36 @@ export default function ProductWindow({ product, index }: { product: Product; in
           <img
             src={product.image}
             alt={product.name}
-            className="h-full w-full object-cover"
+            className={`h-full w-full object-cover ${product.soldOut ? "grayscale" : ""}`}
             loading={index === 0 ? "eager" : "lazy"}
           />
-          {!reducedMotion && (
+          {!reducedMotion && !product.soldOut && (
             <motion.div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
               style={{ left: glossLeft }}
             />
           )}
-          <span className="stitched-border absolute bottom-3 right-3 bg-paper/90 px-2 py-1 font-body text-[0.6rem] tracking-widest text-ink/70">
-            VOIR →
-          </span>
+          {product.soldOut ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
+              <span className="stitched-border -rotate-6 bg-paper px-4 py-1.5 font-display text-sm tracking-widest text-ink">
+                ÉPUISÉ
+              </span>
+            </div>
+          ) : (
+            <span className="stitched-border absolute bottom-3 right-3 bg-paper/90 px-2 py-1 font-body text-[0.6rem] tracking-widest text-ink/70">
+              VOIR →
+            </span>
+          )}
         </motion.div>
 
         <div className="flex flex-col items-center gap-3 text-center">
           <h3 className="font-display text-xl text-paper">{product.name}</h3>
           <p className="max-w-[26ch] font-body text-sm text-paper/70">{product.description}</p>
           <span
-            className={`stitched-border inline-flex items-center gap-1 px-3 py-1 font-display text-sm text-ink ${ACCENT_BG[product.accent]}`}
+            className={`stitched-border inline-flex items-center gap-1 px-3 py-1 font-display text-sm text-ink ${
+              product.soldOut ? "bg-ink/20 text-paper/70 line-through" : ACCENT_BG[product.accent]
+            }`}
           >
             {product.price} €
           </span>

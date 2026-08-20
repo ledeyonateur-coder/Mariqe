@@ -6,6 +6,9 @@ export type Product = {
   image: string; // chemin vers /public/products/...
   variantImages?: string[]; // pour l'aspect "modulable"
   accent: "rust" | "sage" | "mustard" | "denim" | "dusty" | "olive";
+  // Chaque pièce est unique (1 Drop = 1 Pièce) : passe à true dès qu'elle est vendue
+  // pour la retirer de la vente. À faire manuellement, pas de suivi de stock automatique.
+  soldOut?: boolean;
 };
 
 // 6 entrées placeholders — à remplacer par les vrais visuels/prix du drop.

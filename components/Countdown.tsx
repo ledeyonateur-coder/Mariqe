@@ -170,7 +170,7 @@ export default function Countdown() {
           <button
             type="button"
             onClick={handleSkip}
-            className="font-body text-sm underline decoration-dashed underline-offset-4 text-ink/70 transition-colors duration-300 ease-signature hover:text-ink"
+            className="max-w-xs whitespace-pre-line font-body text-sm underline decoration-dashed underline-offset-4 text-ink/70 transition-colors duration-300 ease-signature hover:text-ink"
           >
             {config.countdown.previewCta}
           </button>
