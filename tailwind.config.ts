@@ -51,6 +51,7 @@ const config: Config = {
       fontFamily: {
         display: ["var(--font-display)", "system-ui", "sans-serif"],
         body: ["var(--font-body)", "system-ui", "sans-serif"],
+        wordmark: ["var(--font-wordmark)", "system-ui", "sans-serif"],
       },
       transitionTimingFunction: {
         signature: "cubic-bezier(0.65, 0, 0.35, 1)",

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo_Black, Inter } from "next/font/google";
+import { Archivo_Black, Fredoka, Inter } from "next/font/google";
 import "@/styles/globals.css";
 import { CartProvider } from "@/lib/cart";
 import PhoneFrame from "@/components/PhoneFrame";
@@ -15,6 +15,13 @@ const displayFont = Archivo_Black({
 const bodyFont = Inter({
   subsets: ["latin"],
   variable: "--font-body",
+  display: "swap",
+});
+
+const wordmarkFont = Fredoka({
+  subsets: ["latin"],
+  weight: "600",
+  variable: "--font-wordmark",
   display: "swap",
 });
 
@@ -40,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr" className={`${displayFont.variable} ${bodyFont.variable}`}>
+    <html lang="fr" className={`${displayFont.variable} ${bodyFont.variable} ${wordmarkFont.variable}`}>
       <body>
         <CartProvider>
           <PhoneFrame>{children}</PhoneFrame>
