@@ -8,6 +8,7 @@ import type { Appearance } from "@stripe/stripe-js";
 import { isSoldOut } from "@/data/products";
 import { useCart } from "@/lib/cart";
 import { getStripe } from "@/lib/stripeClient";
+import { useAmbientColor } from "@/lib/useAmbientColor";
 
 // Matches the site's own inputs (dashed border, paper background, Inter body
 // font) as closely as Stripe's Appearance API allows — the card fields
@@ -62,6 +63,7 @@ export default function CheckoutPage() {
 }
 
 function CheckoutForm() {
+  useAmbientColor("#E7DEC4");
   const { lines, totalPrice, removeItem } = useCart();
   const hasSoldOutLine = lines.some((line) => isSoldOut(line.product));
   const searchParams = useSearchParams();

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCart } from "@/lib/cart";
+import { useAmbientColor } from "@/lib/useAmbientColor";
 
 export default function SuccessPage() {
   return (
@@ -14,6 +15,7 @@ export default function SuccessPage() {
 }
 
 function SuccessContent() {
+  useAmbientColor("#E7DEC4");
   const searchParams = useSearchParams();
   const paymentIntentId = searchParams.get("payment_intent");
   const { clear } = useCart();

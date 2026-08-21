@@ -75,7 +75,7 @@ export default function SunriseHero() {
 
       tl.to(
         sunRef.current,
-        { yPercent: -170, ease: "none", duration: 1 },
+        { yPercent: -170, filter: "brightness(1) saturate(1)", ease: "none", duration: 1 },
         0
       ).to(
         wordmarkRef.current,
@@ -152,11 +152,17 @@ export default function SunriseHero() {
         SOLEIL
       </div>
 
-      {/* Sun */}
+      {/* Sun — starts dim/desaturated (unlit, matching the dark night sky
+          behind it) and lights up to full brightness in lockstep with the
+          sky stages via the "filter" tween above, instead of always looking
+          fully lit even down at its dark starting position. */}
       <div
         ref={sunRef}
         className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)] lg:h-36 lg:w-36"
-        style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
+        style={{
+          filter: reducedMotion ? "brightness(1) saturate(1)" : "brightness(0.35) saturate(0.3)",
+          transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
+        }}
       />
 
       {/* Water reflection */}

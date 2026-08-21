@@ -7,6 +7,7 @@ import { isSoldOut, type Product } from "@/data/products";
 import { useCart } from "@/lib/cart";
 import { useReducedMotion } from "@/lib/scrollAnimations";
 import { useStockOverrides, withLiveStock } from "@/lib/stock";
+import { useAmbientColor } from "@/lib/useAmbientColor";
 
 const EASE = [0.65, 0, 0.35, 1] as const;
 
@@ -20,6 +21,7 @@ const ACCENT_BG: Record<Product["accent"], string> = {
 };
 
 export default function ProductDetail({ product: productProp, index }: { product: Product; index: number }) {
+  useAmbientColor("#E7DEC4");
   const stockOverrides = useStockOverrides();
   const product = withLiveStock(productProp, stockOverrides);
   const soldOut = isSoldOut(product);

@@ -113,6 +113,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     reserved.forEach(releaseReservation);
     console.error("Stripe PaymentIntent creation failed", error);
-    return NextResponse.json({ error: "Impossible de créer le paiement." }, { status: 500 });
+    // Stripe's own error messages are written to be safe to show end users
+    // (e.g. "Invalid API Key provided" surfaces a key mix-up immediately
+    // instead of a dead-end generic message) — anything else stays generic.
+    const detail = error instanceof Stripe.errors.StripeError ? error.message : null;
+    return NextResponse.json(
+      { error: detail ? `Impossible de créer le paiement : ${detail}` : "Impossible de créer le paiement." },
+      { status: 500 }
+    );
   }
 }
