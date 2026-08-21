@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 // PhoneFrame.tsx for how these get crossfaded onto the desktop gutters).
 // "hero" has no entry — the live gradient layer shows through instead.
 const SECTION_BACKDROPS: Record<string, string> = {
-  countdown: "#7A9D7E",
+  countdown: "#8098DD",
   collection: "#E7DEC4",
   footer: "#12141c",
 };
