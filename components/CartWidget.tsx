@@ -17,7 +17,7 @@ export default function CartWidget() {
         type="button"
         onClick={open}
         aria-label={`Panier, ${totalCount} article${totalCount > 1 ? "s" : ""}`}
-        className="fixed right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-ink/80 text-paper shadow-lg backdrop-blur transition-transform duration-300 ease-signature hover:scale-105"
+        className="stitched-border fixed right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-paper/90 text-ink shadow-lg transition-transform duration-300 ease-signature hover:scale-105"
         style={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
