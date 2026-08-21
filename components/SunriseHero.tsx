@@ -84,7 +84,7 @@ export default function SunriseHero() {
       ).to(
         wordmarkRef.current,
         { opacity: 1, ease: "none", duration: 0.12 },
-        0.5
+        0.45
       ).to(
         glowRef.current,
         { yPercent: -170, opacity: 0.9, ease: "none", duration: 1 },
@@ -139,18 +139,16 @@ export default function SunriseHero() {
         style={{ opacity: reducedMotion ? 0.9 : 0.1, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
-      {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in
-          lockstep with it. A soft warm glow (echoing the sun's own glow, not
-          just a flat drop-shadow) grounds it in the scene instead of reading
-          as text pasted on top of the sky. */}
+      {/* Wordmark — appears once the sun has cleared 45% of its rise, moves in
+          lockstep with it. Same cream pill as the persistent top-left badge,
+          so the reveal reads as "the badge showing up in the scene" rather
+          than a second, differently-styled logo treatment. */}
       <div
         ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-6xl text-[#1E3A8A] sm:text-7xl lg:text-8xl"
+        className="stitched-border pointer-events-none absolute left-1/2 top-[30%] flex h-11 -translate-x-1/2 items-center whitespace-nowrap rounded-full bg-paper/90 px-4 font-wordmark text-lg leading-none text-[#8098DD] shadow-lg"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
-          filter:
-            "drop-shadow(0 2px 4px rgba(23,20,15,0.25)) drop-shadow(0 0 28px rgba(255,179,122,0.65))",
         }}
         aria-hidden="true"
       >
