@@ -14,10 +14,13 @@ const SKY_STAGES = [
   "linear-gradient(180deg, #FF6B3D 0%, #ffa347 55%, #F3B23E 100%)",
 ];
 
-// The middle color stop of each SKY_STAGES gradient above — used to mirror
-// the sky's current color onto the desktop gutter (--ambient-bg) as the
-// hero animates, instead of a single flat tone for the whole hero.
-const SKY_AMBIENT_STOPS = ["#1a1d29", "#5c6478", "#d69a8a", "#ff8a55", "#ffa347"];
+// The top (0%) and bottom (100%) stops of each SKY_STAGES gradient above —
+// interpolated independently so the desktop gutter (--ambient-bg) renders
+// as the same two-stop vertical gradient as the sky, not just an
+// approximate flat tone. That's what makes the sides actually match the
+// center instead of merely echoing its general hue.
+const SKY_AMBIENT_TOP = ["#12141C", "#232838", "#8B96A8", "#FFB37A", "#FF6B3D"];
+const SKY_AMBIENT_BOTTOM = ["#232838", "#8B96A8", "#FFB37A", "#FF6B3D", "#F3B23E"];
 
 export default function SunriseHero() {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -51,11 +54,15 @@ export default function SunriseHero() {
             // pinned range — otherwise AmbientBackground's section-based
             // colors (countdown/collection/footer) take over.
             if (!self.isActive) return;
-            const segment = 1 / (SKY_AMBIENT_STOPS.length - 1);
-            const index = Math.min(SKY_AMBIENT_STOPS.length - 2, Math.floor(self.progress / segment));
+            const segment = 1 / (SKY_AMBIENT_TOP.length - 1);
+            const index = Math.min(SKY_AMBIENT_TOP.length - 2, Math.floor(self.progress / segment));
             const localT = (self.progress - index * segment) / segment;
-            const color = lerpColor(SKY_AMBIENT_STOPS[index], SKY_AMBIENT_STOPS[index + 1], localT);
-            document.documentElement.style.setProperty("--ambient-bg", color);
+            const top = lerpColor(SKY_AMBIENT_TOP[index], SKY_AMBIENT_TOP[index + 1], localT);
+            const bottom = lerpColor(SKY_AMBIENT_BOTTOM[index], SKY_AMBIENT_BOTTOM[index + 1], localT);
+            document.documentElement.style.setProperty(
+              "--ambient-bg",
+              `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`
+            );
           },
         },
       });

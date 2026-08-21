@@ -5,10 +5,15 @@ export default function PhoneFrame({ children }: { children: React.ReactNode }) 
           --ambient-bg as you scroll, instead of fading to flat black once
           you're deep in a tall page. No z-index: it's the first element in
           the DOM, so paint order alone keeps it behind the card — a negative
-          z-index here was actually rendering it behind the <body> background. */}
+          z-index here was actually rendering it behind the <body> background.
+          No CSS transition either: --ambient-bg updates every scroll frame
+          while inside the hero (already smoothed by GSAP's own scrub), and a
+          transition on top of that made it visibly lag/chase behind the
+          actual on-screen sky color. `background` (not `background-color`)
+          because the hero sets this to a gradient, not a flat color. */}
       <div
-        className="fixed inset-0 transition-[background-color] duration-300 ease-signature"
-        style={{ backgroundColor: "var(--ambient-bg)" }}
+        className="fixed inset-0"
+        style={{ background: "var(--ambient-bg)" }}
         aria-hidden="true"
       />
       <div
