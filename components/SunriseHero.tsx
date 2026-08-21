@@ -198,7 +198,7 @@ export default function SunriseHero() {
 
       <div
         ref={scrollHintRef}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 font-display text-xs tracking-[0.3em] text-paper/80"
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 font-display text-xs tracking-[0.3em] text-sunset-gold"
         style={{ opacity: reducedMotion ? 0 : undefined }}
       >
         <span className="animate-pulse">{config.hero.scrollHint} ↓</span>
