@@ -170,7 +170,7 @@ export default function Countdown() {
           }`}
           aria-hidden={stage !== "counting" && stage !== "flash"}
         >
-          <p className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-rust-orange lg:text-xs">
+          <p className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-paper lg:text-xs">
             {config.countdown.eyebrow}
           </p>
 
