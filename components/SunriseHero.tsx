@@ -139,13 +139,18 @@ export default function SunriseHero() {
         style={{ opacity: reducedMotion ? 0.9 : 0.4, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
-      {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in lockstep with it */}
+      {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in
+          lockstep with it. A soft warm glow (echoing the sun's own glow, not
+          just a flat drop-shadow) grounds it in the scene instead of reading
+          as text pasted on top of the sky. */}
       <div
         ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-6xl text-[#1E3A8A] drop-shadow-sm sm:text-7xl lg:text-8xl"
+        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-6xl text-[#1E3A8A] sm:text-7xl lg:text-8xl"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
+          filter:
+            "drop-shadow(0 2px 4px rgba(23,20,15,0.25)) drop-shadow(0 0 28px rgba(255,179,122,0.65))",
         }}
         aria-hidden="true"
       >

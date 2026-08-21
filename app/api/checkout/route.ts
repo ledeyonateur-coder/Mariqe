@@ -4,6 +4,10 @@ import { products } from "@/data/products";
 import { getSoldQuantity } from "@/lib/stockStore";
 import { reserveForCheckout, releaseReservation } from "@/lib/checkoutLock";
 
+// Give the Stripe SDK's own retries room to run within Vercel's function
+// timeout instead of the platform killing the request mid-retry.
+export const maxDuration = 30;
+
 type CheckoutRequestBody = {
   lines: { productId: string; quantity: number }[];
   customer: {
@@ -84,7 +88,7 @@ export async function POST(request: NextRequest) {
     reserved.push(productId);
   }
 
-  const stripe = new Stripe(secretKey);
+  const stripe = new Stripe(secretKey, { maxNetworkRetries: 3, timeout: 20000 });
 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
