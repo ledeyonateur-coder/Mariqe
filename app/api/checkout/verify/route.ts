@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import { getStripeServer } from "@/lib/stripeServer";
 
 export async function GET(request: NextRequest) {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const stripe = new Stripe(secretKey);
+    const stripe = getStripeServer(secretKey);
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
     return NextResponse.json({ paid: paymentIntent.status === "succeeded" });
   } catch (error) {
