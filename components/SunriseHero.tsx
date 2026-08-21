@@ -151,11 +151,21 @@ export default function SunriseHero() {
         />
       ))}
 
-      {/* Sun glow — barely there at the dark start, builds up with the sun itself */}
+      {/* Sun glow — barely there at the dark start, builds up with the sun
+          itself. A radial gradient instead of a blurred solid disc: a CSS
+          filter like blur-3xl forces the GPU to re-rasterize a large blurred
+          bitmap on scroll, which was a major source of scroll jank — a
+          gradient with the same soft falloff is drawn once and just
+          recomposited (translated), which is essentially free. */}
       <div
         ref={glowRef}
-        className="absolute left-1/2 top-[62%] h-40 w-40 -translate-x-1/2 rounded-full bg-sunset-gold blur-3xl lg:h-56 lg:w-56"
-        style={{ opacity: reducedMotion ? 0.9 : 0.1, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
+        className="absolute left-1/2 top-[62%] h-72 w-72 -translate-x-1/2 rounded-full lg:h-96 lg:w-96"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(243,178,62,0.55) 0%, rgba(243,178,62,0.25) 35%, rgba(243,178,62,0) 70%)",
+          opacity: reducedMotion ? 0.9 : 0.1,
+          transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
+        }}
       />
 
       {/* Wordmark — appears once the sun has cleared 45% of its rise, moves in
@@ -191,10 +201,13 @@ export default function SunriseHero() {
         />
       </div>
 
-      {/* Water reflection */}
+      {/* Water reflection — extra gradient stops fade the top edge out
+          gradually instead of relying on blur-md to soften it, for the same
+          reason as the glow above: no runtime blur filter to re-rasterize
+          on scroll. */}
       <div
         ref={waterRef}
-        className="absolute bottom-0 left-0 h-[30%] w-full bg-gradient-to-t from-sunset-gold/40 via-sunset-coral/20 to-transparent blur-md"
+        className="absolute bottom-0 left-0 h-[30%] w-full bg-gradient-to-t from-sunset-gold/40 from-0% via-sunset-coral/15 via-55% to-transparent to-100%"
         style={{ opacity: reducedMotion ? 0.8 : 0.15 }}
       />
 
