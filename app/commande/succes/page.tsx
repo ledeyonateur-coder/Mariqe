@@ -15,16 +15,16 @@ export default function SuccessPage() {
 
 function SuccessContent() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get("session_id");
+  const paymentIntentId = searchParams.get("payment_intent");
   const { clear } = useCart();
   const [status, setStatus] = useState<"checking" | "paid" | "unknown">("checking");
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!paymentIntentId) {
       setStatus("unknown");
       return;
     }
-    fetch(`/api/checkout/verify?session_id=${encodeURIComponent(sessionId)}`)
+    fetch(`/api/checkout/verify?payment_intent=${encodeURIComponent(paymentIntentId)}`)
       .then((res) => res.json())
       .then((data) => {
         setStatus(data.paid ? "paid" : "unknown");
@@ -32,7 +32,7 @@ function SuccessContent() {
       })
       .catch(() => setStatus("unknown"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [paymentIntentId]);
 
   return (
     <div
