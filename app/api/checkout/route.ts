@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { products } from "@/data/products";
 import { getSoldQuantity } from "@/lib/stockStore";
 import { reserveForCheckout, releaseReservation } from "@/lib/checkoutLock";
+import { getStripeServer } from "@/lib/stripeServer";
 
 // Give the Stripe SDK's own retries room to run within Vercel's function
 // timeout instead of the platform killing the request mid-retry.
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
     reserved.push(productId);
   }
 
-  const stripe = new Stripe(secretKey, { maxNetworkRetries: 3, timeout: 20000 });
+  const stripe = getStripeServer(secretKey);
 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
