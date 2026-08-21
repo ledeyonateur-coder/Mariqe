@@ -1,19 +1,29 @@
 export default function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
     <>
-      {/* Fixed to the viewport (not the page) so the color always tracks
-          --ambient-bg as you scroll, instead of fading to flat black once
-          you're deep in a tall page. No z-index: it's the first element in
-          the DOM, so paint order alone keeps it behind the card — a negative
-          z-index here was actually rendering it behind the <body> background.
-          No CSS transition either: --ambient-bg updates every scroll frame
-          while inside the hero (already smoothed by GSAP's own scrub), and a
-          transition on top of that made it visibly lag/chase behind the
-          actual on-screen sky color. `background` (not `background-color`)
-          because the hero sets this to a gradient, not a flat color. */}
+      {/* Desktop ambient backdrop, three stacked fixed layers (no z-index:
+          DOM order alone keeps them behind the card — a negative z-index
+          previously rendered them behind the <body> background instead).
+
+          - #ambient-live: continuously updated by the hero's scroll-linked
+            gradient, no transition (a transition on top of GSAP's own scrub
+            made it visibly lag/chase behind the actual sky color).
+          - #ambient-overlay-a / -b: sit above the live layer, opacity-only
+            crossfade between them driven by AmbientBackground.tsx whenever
+            the dominant section changes (countdown/collection/footer), so
+            that jump doesn't cut abruptly the way changing `background`
+            directly would — opacity transitions smoothly regardless of
+            whether the two backgrounds are gradients or flat colors,
+            which a `background` transition can't reliably do. */}
+      <div className="fixed inset-0" style={{ background: "var(--ambient-live-bg)" }} aria-hidden="true" />
       <div
-        className="fixed inset-0"
-        style={{ background: "var(--ambient-bg)" }}
+        id="ambient-overlay-a"
+        className="fixed inset-0 opacity-0 transition-opacity duration-500 ease-signature"
+        aria-hidden="true"
+      />
+      <div
+        id="ambient-overlay-b"
+        className="fixed inset-0 opacity-0 transition-opacity duration-500 ease-signature"
         aria-hidden="true"
       />
       <div

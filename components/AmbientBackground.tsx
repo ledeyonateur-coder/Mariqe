@@ -1,38 +1,54 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
-// On desktop, the card floats over visible gutters (see PhoneFrame). This
-// sets --ambient-bg to the EXACT same flat color as whichever section is
-// currently in view, so the gutters read as a seamless continuation of the
-// card rather than an approximate echo. Invisible on phones, where the card
-// fills the viewport and no gutter shows.
+// Flat colors, matching each section's actual background exactly (see
+// PhoneFrame.tsx for how these get crossfaded onto the desktop gutters).
+// "hero" has no entry — the live gradient layer shows through instead.
 const SECTION_BACKDROPS: Record<string, string> = {
-  hero: "#12141c",
-  countdown: "#F7D98F",
+  countdown: "#D98E7C",
   collection: "#E7DEC4",
   footer: "#12141c",
 };
 
-const DEFAULT_BACKDROP = SECTION_BACKDROPS.hero;
-
 export default function AmbientBackground() {
+  const activeOverlay = useRef<"a" | "b" | null>(null);
+
   useEffect(() => {
-    const sections = Object.keys(SECTION_BACKDROPS)
+    const sectionIds = ["hero", "countdown", "collection", "footer"];
+    const sections = sectionIds
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
-
-    if (sections.length === 0) return;
+    const overlayA = document.getElementById("ambient-overlay-a");
+    const overlayB = document.getElementById("ambient-overlay-b");
+    if (sections.length === 0 || !overlayA || !overlayB) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         const mostVisible = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        const backdrop = mostVisible && SECTION_BACKDROPS[mostVisible.target.id];
-        if (backdrop) {
-          document.documentElement.style.setProperty("--ambient-bg", backdrop);
+        if (!mostVisible) return;
+
+        const backdrop = SECTION_BACKDROPS[mostVisible.target.id];
+        if (!backdrop) {
+          // Hero: fade both overlays out to reveal the live gradient layer.
+          overlayA.style.opacity = "0";
+          overlayB.style.opacity = "0";
+          activeOverlay.current = null;
+          return;
         }
+
+        const current = activeOverlay.current;
+        const next = current === "a" ? "b" : "a";
+        const nextEl = next === "a" ? overlayA : overlayB;
+        const prevEl = current === "a" ? overlayA : current === "b" ? overlayB : null;
+
+        nextEl.style.background = backdrop;
+        void nextEl.offsetHeight; // force layout so the opacity change below actually transitions
+        nextEl.style.opacity = "1";
+        if (prevEl) prevEl.style.opacity = "0";
+        activeOverlay.current = next;
       },
       { threshold: 0.5 }
     );
@@ -40,7 +56,9 @@ export default function AmbientBackground() {
     sections.forEach((section) => observer.observe(section));
     return () => {
       observer.disconnect();
-      document.documentElement.style.setProperty("--ambient-bg", DEFAULT_BACKDROP);
+      overlayA.style.opacity = "0";
+      overlayB.style.opacity = "0";
+      activeOverlay.current = null;
     };
   }, []);
 

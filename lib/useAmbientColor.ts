@@ -8,9 +8,9 @@ import { useEffect } from "react";
 // of matching this page's own background.
 export function useAmbientColor(color: string) {
   useEffect(() => {
-    document.documentElement.style.setProperty("--ambient-bg", color);
+    document.documentElement.style.setProperty("--ambient-live-bg", color);
     return () => {
-      document.documentElement.style.setProperty("--ambient-bg", "#12141c");
+      document.documentElement.style.setProperty("--ambient-live-bg", "#12141c");
     };
   }, [color]);
 }
