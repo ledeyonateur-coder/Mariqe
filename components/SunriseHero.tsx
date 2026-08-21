@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import GrainOverlay from "./GrainOverlay";
 import { registerScrollAnimations, gsap, ScrollTrigger, useReducedMotion } from "@/lib/scrollAnimations";
 import { config } from "@/data/config";
+import { lerpColor } from "@/lib/color";
 
 const SKY_STAGES = [
   "linear-gradient(180deg, #12141C 0%, #1a1d29 55%, #232838 100%)",
@@ -12,6 +13,11 @@ const SKY_STAGES = [
   "linear-gradient(180deg, #FFB37A 0%, #ff8a55 55%, #FF6B3D 100%)",
   "linear-gradient(180deg, #FF6B3D 0%, #ffa347 55%, #F3B23E 100%)",
 ];
+
+// The middle color stop of each SKY_STAGES gradient above — used to mirror
+// the sky's current color onto the desktop gutter (--ambient-bg) as the
+// hero animates, instead of a single flat tone for the whole hero.
+const SKY_AMBIENT_STOPS = ["#1a1d29", "#5c6478", "#d69a8a", "#ff8a55", "#ffa347"];
 
 export default function SunriseHero() {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -40,6 +46,17 @@ export default function SunriseHero() {
           start: "top top",
           end: "bottom bottom",
           scrub: 1,
+          onUpdate: (self) => {
+            // Only drive the ambient gutter while actually inside the hero's
+            // pinned range — otherwise AmbientBackground's section-based
+            // colors (countdown/collection/footer) take over.
+            if (!self.isActive) return;
+            const segment = 1 / (SKY_AMBIENT_STOPS.length - 1);
+            const index = Math.min(SKY_AMBIENT_STOPS.length - 2, Math.floor(self.progress / segment));
+            const localT = (self.progress - index * segment) / segment;
+            const color = lerpColor(SKY_AMBIENT_STOPS[index], SKY_AMBIENT_STOPS[index + 1], localT);
+            document.documentElement.style.setProperty("--ambient-bg", color);
+          },
         },
       });
 

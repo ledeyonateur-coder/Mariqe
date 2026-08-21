@@ -3,9 +3,11 @@ export default function PhoneFrame({ children }: { children: React.ReactNode }) 
     <>
       {/* Fixed to the viewport (not the page) so the color always tracks
           --ambient-bg as you scroll, instead of fading to flat black once
-          you're deep in a tall page. */}
+          you're deep in a tall page. No z-index: it's the first element in
+          the DOM, so paint order alone keeps it behind the card — a negative
+          z-index here was actually rendering it behind the <body> background. */}
       <div
-        className="fixed inset-0 -z-10 transition-[background-color] duration-300 ease-signature"
+        className="fixed inset-0 transition-[background-color] duration-300 ease-signature"
         style={{ backgroundColor: "var(--ambient-bg)" }}
         aria-hidden="true"
       />
