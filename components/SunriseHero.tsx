@@ -27,6 +27,7 @@ export default function SunriseHero() {
   const sectionRef = useRef<HTMLElement>(null);
   const skyRefs = useRef<Array<HTMLDivElement | null>>([]);
   const sunRef = useRef<HTMLDivElement>(null);
+  const sunOverlayRef = useRef<HTMLDivElement>(null);
   const wordmarkRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const waterRef = useRef<HTMLDivElement>(null);
@@ -56,7 +57,10 @@ export default function SunriseHero() {
           trigger: wrapper,
           start: "top top",
           end: "bottom bottom",
-          scrub: 1,
+          // scrub: true ties the timeline directly to scroll position with
+          // no catch-up easing — a numeric scrub adds a smoothing delay
+          // that reads as "lag" between the scroll gesture and the sunrise.
+          scrub: true,
           onUpdate: (self) => {
             // Only drive the ambient gutter while actually inside the hero's
             // pinned range — otherwise AmbientBackground's section-based
@@ -83,7 +87,11 @@ export default function SunriseHero() {
 
       tl.to(
         sunRef.current,
-        { yPercent: -170, filter: "brightness(1) saturate(1)", ease: "none", duration: 1 },
+        { yPercent: -170, ease: "none", duration: 1 },
+        0
+      ).to(
+        sunOverlayRef.current,
+        { opacity: 0, ease: "none", duration: 1 },
         0
       ).to(
         wordmarkRef.current,
@@ -143,20 +151,29 @@ export default function SunriseHero() {
         />
       ))}
 
-      {/* Sun glow — barely there at the dark start, builds up with the sun itself */}
+      {/* Sun glow — barely there at the dark start, builds up with the sun
+          itself. A radial gradient instead of a blurred solid disc: a CSS
+          filter like blur-3xl forces the GPU to re-rasterize a large blurred
+          bitmap on scroll, which was a major source of scroll jank — a
+          gradient with the same soft falloff is drawn once and just
+          recomposited (translated), which is essentially free. */}
       <div
         ref={glowRef}
-        className="absolute left-1/2 top-[62%] h-40 w-40 -translate-x-1/2 rounded-full bg-sunset-gold blur-3xl lg:h-56 lg:w-56"
-        style={{ opacity: reducedMotion ? 0.9 : 0.1, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
+        className="absolute left-1/2 top-[62%] h-72 w-72 -translate-x-1/2 rounded-full lg:h-96 lg:w-96"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(243,178,62,0.55) 0%, rgba(243,178,62,0.25) 35%, rgba(243,178,62,0) 70%)",
+          opacity: reducedMotion ? 0.9 : 0.1,
+          transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
+        }}
       />
 
       {/* Wordmark — appears once the sun has cleared 45% of its rise, moves in
-          lockstep with it. Same cream pill as the persistent top-left badge,
-          so the reveal reads as "the badge showing up in the scene" rather
-          than a second, differently-styled logo treatment. */}
+          lockstep with it. Transparent, no pill/outline — same treatment as
+          the persistent top-left badge. */}
       <div
         ref={wordmarkRef}
-        className="stitched-border pointer-events-none absolute left-1/2 top-[30%] flex h-11 -translate-x-1/2 items-center whitespace-nowrap rounded-full bg-paper/90 px-4 font-wordmark text-lg leading-none text-[#8098DD] shadow-lg"
+        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-lg leading-none text-[#8098DD]"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
@@ -166,23 +183,31 @@ export default function SunriseHero() {
         SOLEIL
       </div>
 
-      {/* Sun — starts almost unlit (barely distinguishable from the dark
-          night sky behind it) and lights up to full brightness in lockstep
-          with the sky stages via the "filter" tween above, for a real
-          "lever de soleil" reveal instead of a sun that's always visible. */}
+      {/* Sun — starts almost unlit (a dark overlay disc hides it) and lights
+          up in lockstep with the sky stages as that overlay fades out. Using
+          opacity here instead of an animated "filter" on the sun itself
+          keeps every scroll frame compositor-only (no repaint), which is
+          what actually removes scroll lag — filter animations aren't
+          reliably GPU-composited across browsers. */}
       <div
         ref={sunRef}
         className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)] lg:h-36 lg:w-36"
-        style={{
-          filter: reducedMotion ? "brightness(1) saturate(1)" : "brightness(0.12) saturate(0.15)",
-          transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
-        }}
-      />
+        style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
+      >
+        <div
+          ref={sunOverlayRef}
+          className="absolute inset-0 rounded-full bg-[#12141C]"
+          style={{ opacity: reducedMotion ? 0 : 0.92 }}
+        />
+      </div>
 
-      {/* Water reflection */}
+      {/* Water reflection — extra gradient stops fade the top edge out
+          gradually instead of relying on blur-md to soften it, for the same
+          reason as the glow above: no runtime blur filter to re-rasterize
+          on scroll. */}
       <div
         ref={waterRef}
-        className="absolute bottom-0 left-0 h-[30%] w-full bg-gradient-to-t from-sunset-gold/40 via-sunset-coral/20 to-transparent blur-md"
+        className="absolute bottom-0 left-0 h-[30%] w-full bg-gradient-to-t from-sunset-gold/40 from-0% via-sunset-coral/15 via-55% to-transparent to-100%"
         style={{ opacity: reducedMotion ? 0.8 : 0.15 }}
       />
 
