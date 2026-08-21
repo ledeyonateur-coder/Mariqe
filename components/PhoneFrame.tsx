@@ -15,7 +15,7 @@ export default function PhoneFrame({ children }: { children: React.ReactNode }) 
             directly would — opacity transitions smoothly regardless of
             whether the two backgrounds are gradients or flat colors,
             which a `background` transition can't reliably do. */}
-      <div className="fixed inset-0" style={{ background: "var(--ambient-live-bg)" }} aria-hidden="true" />
+      <div id="ambient-live" className="fixed inset-0" style={{ background: "var(--ambient-live-bg)" }} aria-hidden="true" />
       <div
         id="ambient-overlay-a"
         className="fixed inset-0 opacity-0 transition-opacity duration-500 ease-signature"

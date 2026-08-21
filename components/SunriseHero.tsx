@@ -42,6 +42,14 @@ export default function SunriseHero() {
     const section = sectionRef.current;
     if (!wrapper || !section || !gsapInstance) return;
 
+    // Written directly on the one element that renders it (see PhoneFrame.tsx),
+    // instead of on <html> — a custom property set on documentElement is
+    // inherited, so every write forces the browser to restyle the *entire*
+    // page tree on every scroll frame. Setting it on the leaf element itself
+    // scopes that recalc to just that element, which is what was making the
+    // whole page feel sluggish while scrolling through the hero.
+    const ambientLiveEl = document.getElementById("ambient-live");
+
     const ctx = gsapInstance.context(() => {
       const tl = gsap.timeline({
         scrollTrigger: {
@@ -53,13 +61,13 @@ export default function SunriseHero() {
             // Only drive the ambient gutter while actually inside the hero's
             // pinned range — otherwise AmbientBackground's section-based
             // colors (countdown/collection/footer) take over.
-            if (!self.isActive) return;
+            if (!self.isActive || !ambientLiveEl) return;
             const segment = 1 / (SKY_AMBIENT_TOP.length - 1);
             const index = Math.min(SKY_AMBIENT_TOP.length - 2, Math.floor(self.progress / segment));
             const localT = (self.progress - index * segment) / segment;
             const top = lerpColor(SKY_AMBIENT_TOP[index], SKY_AMBIENT_TOP[index + 1], localT);
             const bottom = lerpColor(SKY_AMBIENT_BOTTOM[index], SKY_AMBIENT_BOTTOM[index + 1], localT);
-            document.documentElement.style.setProperty(
+            ambientLiveEl.style.setProperty(
               "--ambient-live-bg",
               `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`
             );
@@ -108,7 +116,10 @@ export default function SunriseHero() {
       );
     }, wrapper);
 
-    return () => ctx.revert();
+    return () => {
+      ctx.revert();
+      ambientLiveEl?.style.removeProperty("--ambient-live-bg");
+    };
   }, [reducedMotion]);
 
   return (
