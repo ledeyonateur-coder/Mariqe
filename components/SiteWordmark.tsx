@@ -8,7 +8,7 @@ export default function SiteWordmark() {
     <Link
       href="/"
       aria-label="Soleil — retour à l'accueil"
-      className="fixed left-4 z-40 flex h-11 items-center rounded-full bg-ink/80 px-4 font-wordmark text-lg leading-none text-paper shadow-lg backdrop-blur transition-transform duration-300 ease-signature hover:scale-105"
+      className="fixed left-4 z-40 flex h-11 items-center rounded-full bg-ink/80 px-4 font-wordmark text-lg leading-none text-[#8098DD] shadow-lg backdrop-blur transition-transform duration-300 ease-signature hover:scale-105"
       style={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
     >
       SOLEIL
