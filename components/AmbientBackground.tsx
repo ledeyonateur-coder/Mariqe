@@ -2,18 +2,15 @@
 
 import { useEffect } from "react";
 
-// On desktop, the card floats over visible gutters (see PhoneFrame). Those
-// gutters used to stay a flat navy no matter which section — a bright
-// orange countdown or cream product card — was showing, which clashed.
-// This shifts the --ambient-bg custom property to a flat, uniform, dark
-// echo of whichever section is currently in view (a radial fade was tried
-// first, but the falloff made the tint unnoticeable — a flat color reads
-// clearly as "harmonized" instead of a plain black band). Invisible on
-// phones, where the card fills the viewport and no gutter shows.
+// On desktop, the card floats over visible gutters (see PhoneFrame). This
+// sets --ambient-bg to the EXACT same flat color as whichever section is
+// currently in view, so the gutters read as a seamless continuation of the
+// card rather than an approximate echo. Invisible on phones, where the card
+// fills the viewport and no gutter shows.
 const SECTION_BACKDROPS: Record<string, string> = {
   hero: "#12141c",
-  countdown: "#5a4318",
-  collection: "#4f4630",
+  countdown: "#F7D98F",
+  collection: "#E7DEC4",
   footer: "#12141c",
 };
 
