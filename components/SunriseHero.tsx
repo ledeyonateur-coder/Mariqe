@@ -27,6 +27,7 @@ export default function SunriseHero() {
   const sectionRef = useRef<HTMLElement>(null);
   const skyRefs = useRef<Array<HTMLDivElement | null>>([]);
   const sunRef = useRef<HTMLDivElement>(null);
+  const sunOverlayRef = useRef<HTMLDivElement>(null);
   const wordmarkRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const waterRef = useRef<HTMLDivElement>(null);
@@ -56,7 +57,10 @@ export default function SunriseHero() {
           trigger: wrapper,
           start: "top top",
           end: "bottom bottom",
-          scrub: 1,
+          // scrub: true ties the timeline directly to scroll position with
+          // no catch-up easing — a numeric scrub adds a smoothing delay
+          // that reads as "lag" between the scroll gesture and the sunrise.
+          scrub: true,
           onUpdate: (self) => {
             // Only drive the ambient gutter while actually inside the hero's
             // pinned range — otherwise AmbientBackground's section-based
@@ -83,7 +87,11 @@ export default function SunriseHero() {
 
       tl.to(
         sunRef.current,
-        { yPercent: -170, filter: "brightness(1) saturate(1)", ease: "none", duration: 1 },
+        { yPercent: -170, ease: "none", duration: 1 },
+        0
+      ).to(
+        sunOverlayRef.current,
+        { opacity: 0, ease: "none", duration: 1 },
         0
       ).to(
         wordmarkRef.current,
@@ -151,12 +159,11 @@ export default function SunriseHero() {
       />
 
       {/* Wordmark — appears once the sun has cleared 45% of its rise, moves in
-          lockstep with it. Same cream pill as the persistent top-left badge,
-          so the reveal reads as "the badge showing up in the scene" rather
-          than a second, differently-styled logo treatment. */}
+          lockstep with it. Transparent, no pill/outline — same treatment as
+          the persistent top-left badge. */}
       <div
         ref={wordmarkRef}
-        className="stitched-border pointer-events-none absolute left-1/2 top-[30%] flex h-11 -translate-x-1/2 items-center whitespace-nowrap rounded-full bg-paper/90 px-4 font-wordmark text-lg leading-none text-[#8098DD] shadow-lg"
+        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-lg leading-none text-[#8098DD]"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
@@ -166,18 +173,23 @@ export default function SunriseHero() {
         SOLEIL
       </div>
 
-      {/* Sun — starts almost unlit (barely distinguishable from the dark
-          night sky behind it) and lights up to full brightness in lockstep
-          with the sky stages via the "filter" tween above, for a real
-          "lever de soleil" reveal instead of a sun that's always visible. */}
+      {/* Sun — starts almost unlit (a dark overlay disc hides it) and lights
+          up in lockstep with the sky stages as that overlay fades out. Using
+          opacity here instead of an animated "filter" on the sun itself
+          keeps every scroll frame compositor-only (no repaint), which is
+          what actually removes scroll lag — filter animations aren't
+          reliably GPU-composited across browsers. */}
       <div
         ref={sunRef}
         className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)] lg:h-36 lg:w-36"
-        style={{
-          filter: reducedMotion ? "brightness(1) saturate(1)" : "brightness(0.12) saturate(0.15)",
-          transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
-        }}
-      />
+        style={{ transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
+      >
+        <div
+          ref={sunOverlayRef}
+          className="absolute inset-0 rounded-full bg-[#12141C]"
+          style={{ opacity: reducedMotion ? 0 : 0.92 }}
+        />
+      </div>
 
       {/* Water reflection */}
       <div
