@@ -132,11 +132,11 @@ export default function SunriseHero() {
         />
       ))}
 
-      {/* Sun glow */}
+      {/* Sun glow — barely there at the dark start, builds up with the sun itself */}
       <div
         ref={glowRef}
         className="absolute left-1/2 top-[62%] h-40 w-40 -translate-x-1/2 rounded-full bg-sunset-gold blur-3xl lg:h-56 lg:w-56"
-        style={{ opacity: reducedMotion ? 0.9 : 0.4, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
+        style={{ opacity: reducedMotion ? 0.9 : 0.1, transform: reducedMotion ? "translate(-50%, -170%)" : undefined }}
       />
 
       {/* Wordmark — appears once the sun has cleared 50% of its rise, moves in
@@ -157,15 +157,15 @@ export default function SunriseHero() {
         SOLEIL
       </div>
 
-      {/* Sun — starts dim/desaturated (unlit, matching the dark night sky
-          behind it) and lights up to full brightness in lockstep with the
-          sky stages via the "filter" tween above, instead of always looking
-          fully lit even down at its dark starting position. */}
+      {/* Sun — starts almost unlit (barely distinguishable from the dark
+          night sky behind it) and lights up to full brightness in lockstep
+          with the sky stages via the "filter" tween above, for a real
+          "lever de soleil" reveal instead of a sun that's always visible. */}
       <div
         ref={sunRef}
         className="absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-b from-sunset-gold to-sunset-coral shadow-[0_0_60px_20px_rgba(243,178,62,0.45)] lg:h-36 lg:w-36"
         style={{
-          filter: reducedMotion ? "brightness(1) saturate(1)" : "brightness(0.35) saturate(0.3)",
+          filter: reducedMotion ? "brightness(1) saturate(1)" : "brightness(0.12) saturate(0.15)",
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
         }}
       />
