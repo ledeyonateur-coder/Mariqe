@@ -21,6 +21,7 @@ export default function AmbientBackground() {
       .filter((el): el is HTMLElement => el !== null);
     const overlayA = document.getElementById("ambient-overlay-a");
     const overlayB = document.getElementById("ambient-overlay-b");
+    const wordmark = document.getElementById("site-wordmark");
     if (sections.length === 0 || !overlayA || !overlayB) return;
 
     const observer = new IntersectionObserver(
@@ -29,6 +30,12 @@ export default function AmbientBackground() {
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
         if (!mostVisible) return;
+
+        // The top-left logo is the same blue as the countdown background —
+        // switch it to cream there so it stays readable, blue everywhere else.
+        if (wordmark) {
+          wordmark.style.color = mostVisible.target.id === "countdown" ? "#F6F2E9" : "#8098DD";
+        }
 
         const backdrop = SECTION_BACKDROPS[mostVisible.target.id];
         if (!backdrop) {
@@ -58,6 +65,7 @@ export default function AmbientBackground() {
       observer.disconnect();
       overlayA.style.opacity = "0";
       overlayB.style.opacity = "0";
+      if (wordmark) wordmark.style.color = "#8098DD";
       activeOverlay.current = null;
     };
   }, []);
