@@ -142,10 +142,18 @@ function CheckoutForm() {
 
       <ul className="flex flex-col gap-3 border-b border-dashed border-ink/20 pb-4">
         {lines.map((line) => (
-          <li key={line.productId} className="flex items-center justify-between font-body text-sm text-ink">
+          <li key={line.productId} className="flex items-center gap-3 font-body text-sm text-ink">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={line.product.image}
+              alt={line.product.name}
+              className={`stitched-border h-14 w-14 flex-shrink-0 rounded-lg object-cover ${
+                isSoldOut(line.product) ? "grayscale" : ""
+              }`}
+            />
             {isSoldOut(line.product) ? (
               <>
-                <span className="font-wordmark text-pop-red">
+                <span className="flex-1 font-wordmark text-pop-red">
                   {line.product.name} — épuisée
                 </span>
                 <button
@@ -158,7 +166,7 @@ function CheckoutForm() {
               </>
             ) : (
               <>
-                <span>
+                <span className="flex-1">
                   {line.product.name} × {line.quantity}
                 </span>
                 <span>{(line.product.price * line.quantity).toFixed(0)} €</span>
