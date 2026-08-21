@@ -121,7 +121,19 @@ export async function POST(request: NextRequest) {
     // Stripe's own error messages are written to be safe to show end users
     // (e.g. "Invalid API Key provided" surfaces a key mix-up immediately
     // instead of a dead-end generic message) — anything else stays generic.
-    const detail = error instanceof Stripe.errors.StripeError ? error.message : null;
+    // For StripeConnectionError specifically, also surface the underlying
+    // network error code (ETIMEDOUT, ENOTFOUND, ECONNRESET...) from
+    // error.detail — the generic Stripe message alone doesn't say *why* the
+    // connection failed, and that code is the key diagnostic signal.
+    let detail: string | null = null;
+    if (error instanceof Stripe.errors.StripeError) {
+      detail = error.message;
+      const underlying = (error as Stripe.errors.StripeConnectionError).detail as
+        | { code?: string; message?: string; cause?: { code?: string } }
+        | undefined;
+      const code = underlying?.cause?.code ?? underlying?.code;
+      if (code) detail += ` [${code}]`;
+    }
     return NextResponse.json(
       { error: detail ? `Impossible de créer le paiement : ${detail}` : "Impossible de créer le paiement." },
       { status: 500 }
