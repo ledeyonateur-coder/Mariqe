@@ -22,6 +22,12 @@ const SKY_STAGES = [
 const SKY_AMBIENT_TOP = ["#12141C", "#232838", "#8B96A8", "#FFB37A", "#FF6B3D"];
 const SKY_AMBIENT_BOTTOM = ["#232838", "#8B96A8", "#FFB37A", "#FF6B3D", "#F3B23E"];
 
+// The wordmark's letters fan out around the sun's rim like rays instead of
+// sitting as flat text above it — each letter is placed at its own angle
+// around the center and rotated to follow the curve.
+const WORDMARK_LETTERS = "SOLEIL".split("");
+const WORDMARK_ARC_SPAN = 170;
+
 export default function SunriseHero() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -169,18 +175,31 @@ export default function SunriseHero() {
       />
 
       {/* Wordmark — appears once the sun has cleared 45% of its rise, moves in
-          lockstep with it. Transparent, no pill/outline — same treatment as
-          the persistent top-left badge. */}
+          lockstep with it. Letters fan out around the sun's rim like rays
+          (each one placed at its own angle and rotated to follow the curve)
+          instead of sitting as flat text above it. */}
       <div
         ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[30%] -translate-x-1/2 whitespace-nowrap font-wordmark text-lg leading-none text-[#8098DD]"
+        className="pointer-events-none absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 [--arc-radius:3.75rem] lg:h-36 lg:w-36 lg:[--arc-radius:5.5rem]"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
         }}
         aria-hidden="true"
       >
-        SOLEIL
+        {WORDMARK_LETTERS.map((letter, index) => {
+          const t = WORDMARK_LETTERS.length === 1 ? 0 : index / (WORDMARK_LETTERS.length - 1) - 0.5;
+          const angle = t * WORDMARK_ARC_SPAN;
+          return (
+            <span
+              key={index}
+              className="absolute left-1/2 top-1/2 font-wordmark text-lg leading-none text-[#8098DD] lg:text-xl"
+              style={{ transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * var(--arc-radius)))` }}
+            >
+              {letter}
+            </span>
+          );
+        })}
       </div>
 
       {/* Sun — starts almost unlit (a dark overlay disc hides it) and lights
