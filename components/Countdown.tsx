@@ -56,7 +56,10 @@ function CountUnit({ value, label, reducedMotion }: { value: number; label: stri
   const digits = pad(value).split("");
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="stitched-border flex bg-clay-brown/40 px-1.5 py-1 font-display text-2xl text-paper sm:text-3xl lg:text-4xl">
+      <div
+        className="stitched-border flex bg-ink px-2 py-1.5 font-display text-2xl text-paper shadow-md sm:text-3xl lg:text-4xl"
+        style={{ borderColor: "rgba(246,242,233,0.35)" }}
+      >
         {digits.map((digit, index) => (
           <FlipDigit key={index} value={digit} reducedMotion={reducedMotion} />
         ))}
