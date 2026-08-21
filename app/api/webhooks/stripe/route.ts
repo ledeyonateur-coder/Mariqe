@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Signature invalide." }, { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const lineMetadata = session.metadata?.lines?.split(",").filter(Boolean) ?? [];
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const lineMetadata = paymentIntent.metadata?.lines?.split(",").filter(Boolean) ?? [];
     await Promise.all(
       lineMetadata.map((entry) => {
         const [productId, quantityRaw] = entry.split(":");

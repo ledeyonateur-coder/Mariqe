@@ -4,12 +4,14 @@ import { products } from "@/data/products";
 import { getSoldQuantity } from "@/lib/stockStore";
 import { reserveForCheckout, releaseReservation } from "@/lib/checkoutLock";
 
-const ALLOWED_SHIPPING_COUNTRIES: Stripe.Checkout.SessionCreateParams.ShippingAddressCollection["allowed_countries"] =
-  ["FR", "BE", "CH", "LU", "MC", "DE", "ES", "IT", "GB"];
-
 type CheckoutRequestBody = {
   lines: { productId: string; quantity: number }[];
-  customer: { name: string; email: string; phone?: string };
+  customer: {
+    name: string;
+    email: string;
+    phone?: string;
+    address: { line1: string; city: string; postalCode: string; country: string };
+  };
 };
 
 export async function POST(request: NextRequest) {
@@ -37,9 +39,13 @@ export async function POST(request: NextRequest) {
   if (!body.customer?.email || !body.customer?.name) {
     return NextResponse.json({ error: "Nom et email requis." }, { status: 400 });
   }
+  const address = body.customer.address;
+  if (!address?.line1 || !address?.city || !address?.postalCode || !address?.country) {
+    return NextResponse.json({ error: "Adresse de livraison incomplète." }, { status: 400 });
+  }
 
   // Prices always come from the server-side catalog, never trust client-submitted amounts.
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+  let amount = 0;
   const normalizedLines: { productId: string; quantity: number }[] = [];
   for (const line of body.lines) {
     const product = products.find((p) => p.id === line.productId);
@@ -56,22 +62,12 @@ export async function POST(request: NextRequest) {
       );
     }
     normalizedLines.push({ productId: product.id, quantity });
-    lineItems.push({
-      quantity,
-      price_data: {
-        currency: "eur",
-        unit_amount: Math.round(product.price * 100),
-        product_data: {
-          name: product.name,
-          images: [new URL(product.image, request.nextUrl.origin).toString()],
-        },
-      },
-    });
+    amount += Math.round(product.price * 100) * quantity;
   }
 
-  // Reserve every unique piece for the duration of the Checkout session so a
-  // second buyer can't start paying for the same item in the meantime. If
-  // any one of them is already reserved, roll back and reject the whole cart.
+  // Reserve every unique piece for the duration of the payment so a second
+  // buyer can't start paying for the same item in the meantime. If any one
+  // of them is already reserved, roll back and reject the whole cart.
   const productIds = normalizedLines.map((line) => line.productId);
   const reserved: string[] = [];
   for (const productId of productIds) {
@@ -89,29 +85,34 @@ export async function POST(request: NextRequest) {
   }
 
   const stripe = new Stripe(secretKey);
-  const origin = request.nextUrl.origin;
 
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: lineItems,
-      customer_email: body.customer.email,
-      phone_number_collection: { enabled: true },
-      shipping_address_collection: { allowed_countries: ALLOWED_SHIPPING_COUNTRIES },
-      expires_at: Math.floor(Date.now() / 1000) + 32 * 60,
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: "eur",
+      automatic_payment_methods: { enabled: true },
+      receipt_email: body.customer.email,
+      shipping: {
+        name: body.customer.name,
+        phone: body.customer.phone,
+        address: {
+          line1: address.line1,
+          city: address.city,
+          postal_code: address.postalCode,
+          country: address.country,
+        },
+      },
       metadata: {
         customer_name: body.customer.name,
         customer_phone: body.customer.phone ?? "",
         lines: normalizedLines.map((line) => `${line.productId}:${line.quantity}`).join(","),
       },
-      success_url: `${origin}/commande/succes?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/commande?cancelled=1`,
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
     reserved.forEach(releaseReservation);
-    console.error("Stripe checkout session creation failed", error);
-    return NextResponse.json({ error: "Impossible de créer la session de paiement." }, { status: 500 });
+    console.error("Stripe PaymentIntent creation failed", error);
+    return NextResponse.json({ error: "Impossible de créer le paiement." }, { status: 500 });
   }
 }
