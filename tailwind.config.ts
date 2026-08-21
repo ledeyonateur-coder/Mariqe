@@ -38,7 +38,7 @@ const config: Config = {
           brown: "#4A3524",
         },
         dusty: {
-          pink: "#D98E7C",
+          pink: "#7A9D7E",
         },
         pop: {
           red: "#D8432E",
