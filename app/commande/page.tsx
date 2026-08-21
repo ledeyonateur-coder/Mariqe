@@ -9,6 +9,7 @@ import { isSoldOut } from "@/data/products";
 import { useCart } from "@/lib/cart";
 import { getStripe } from "@/lib/stripeClient";
 import { useAmbientColor } from "@/lib/useAmbientColor";
+import { useAddressSuggestions } from "@/lib/useAddressSuggestions";
 
 // Matches the site's own inputs (dashed border, paper background, Inter body
 // font) as closely as Stripe's Appearance API allows — the card fields
@@ -79,6 +80,17 @@ function CheckoutForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [addressVerified, setAddressVerified] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const addressSuggestions = useAddressSuggestions(addressLine1, country === "FR" && !addressVerified);
+
+  function handleSelectSuggestion(suggestion: { street: string; city: string; postalCode: string }) {
+    setAddressLine1(suggestion.street);
+    setCity(suggestion.city);
+    setPostalCode(suggestion.postalCode);
+    setAddressVerified(true);
+    setShowSuggestions(false);
+  }
 
   async function handleInfoSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -218,15 +230,51 @@ function CheckoutForm() {
             />
           </label>
 
-          <label className="flex flex-col gap-1 font-body text-sm text-ink">
+          <label className="relative flex flex-col gap-1 font-body text-sm text-ink">
             Adresse
             <input
               required
               type="text"
+              autoComplete="off"
               value={addressLine1}
-              onChange={(e) => setAddressLine1(e.target.value)}
+              onChange={(e) => {
+                setAddressLine1(e.target.value);
+                setAddressVerified(false);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               className="stitched-border bg-paper px-3 py-2 font-body text-sm text-ink outline-none focus:border-ink"
             />
+            {addressVerified && (
+              <span className="mt-1 flex items-center gap-1 font-body text-xs text-pop-green">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M5 13l4 4L19 7"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Adresse vérifiée
+              </span>
+            )}
+            {showSuggestions && addressSuggestions.length > 0 && (
+              <ul className="stitched-border absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto bg-paper shadow-lg">
+                {addressSuggestions.map((suggestion) => (
+                  <li key={suggestion.label}>
+                    <button
+                      type="button"
+                      onMouseDown={() => handleSelectSuggestion(suggestion)}
+                      className="w-full px-3 py-2 text-left font-body text-sm text-ink hover:bg-cream-khaki"
+                    >
+                      {suggestion.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </label>
 
           <div className="flex gap-3">
@@ -236,7 +284,10 @@ function CheckoutForm() {
                 required
                 type="text"
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={(e) => {
+                  setCity(e.target.value);
+                  setAddressVerified(false);
+                }}
                 className="stitched-border bg-paper px-3 py-2 font-body text-sm text-ink outline-none focus:border-ink"
               />
             </label>
@@ -246,7 +297,10 @@ function CheckoutForm() {
                 required
                 type="text"
                 value={postalCode}
-                onChange={(e) => setPostalCode(e.target.value)}
+                onChange={(e) => {
+                  setPostalCode(e.target.value);
+                  setAddressVerified(false);
+                }}
                 className="stitched-border bg-paper px-3 py-2 font-body text-sm text-ink outline-none focus:border-ink"
               />
             </label>
@@ -256,7 +310,10 @@ function CheckoutForm() {
             Pays
             <select
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
+              onChange={(e) => {
+                setCountry(e.target.value);
+                setAddressVerified(false);
+              }}
               className="stitched-border bg-paper px-3 py-2 font-body text-sm text-ink outline-none focus:border-ink"
             >
               {ALLOWED_COUNTRIES.map((c) => (
