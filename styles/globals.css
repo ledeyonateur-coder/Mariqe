@@ -30,9 +30,11 @@
 
   --ease-signature: cubic-bezier(0.65, 0, 0.35, 1);
 
-  /* Desktop-only backdrop behind the card, shifted per-section by AmbientBackground
-     so it harmonizes with whatever's currently showing instead of staying a flat navy. */
-  --ambient-bg: #12141c;
+  /* Desktop-only backdrop behind the card: the live layer tracks the hero's
+     scroll-linked sky gradient (see SunriseHero.tsx); AmbientBackground.tsx
+     crossfades a solid overlay on top of it once you scroll into a flat-color
+     section (countdown/collection/footer). */
+  --ambient-live-bg: #12141c;
 }
 
 * {

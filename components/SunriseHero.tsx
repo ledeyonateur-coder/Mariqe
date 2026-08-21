@@ -15,8 +15,8 @@ const SKY_STAGES = [
 ];
 
 // The top (0%) and bottom (100%) stops of each SKY_STAGES gradient above —
-// interpolated independently so the desktop gutter (--ambient-bg) renders
-// as the same two-stop vertical gradient as the sky, not just an
+// interpolated independently so the desktop gutter (--ambient-live-bg)
+// renders as the same two-stop vertical gradient as the sky, not just an
 // approximate flat tone. That's what makes the sides actually match the
 // center instead of merely echoing its general hue.
 const SKY_AMBIENT_TOP = ["#12141C", "#232838", "#8B96A8", "#FFB37A", "#FF6B3D"];
@@ -60,7 +60,7 @@ export default function SunriseHero() {
             const top = lerpColor(SKY_AMBIENT_TOP[index], SKY_AMBIENT_TOP[index + 1], localT);
             const bottom = lerpColor(SKY_AMBIENT_BOTTOM[index], SKY_AMBIENT_BOTTOM[index + 1], localT);
             document.documentElement.style.setProperty(
-              "--ambient-bg",
+              "--ambient-live-bg",
               `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`
             );
           },
