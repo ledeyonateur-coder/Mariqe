@@ -137,8 +137,17 @@ export default function SunriseHero() {
   }, [reducedMotion]);
 
   return (
-    <div id="hero" ref={wrapperRef} className={`relative w-full ${reducedMotion ? "h-[100dvh]" : "h-[250dvh]"}`}>
+    <div ref={wrapperRef} className={`relative w-full ${reducedMotion ? "h-[100dvh]" : "h-[250dvh]"}`}>
+    {/* id="hero" lives on this sticky 100dvh section, not the 250dvh
+        scroll-spacer wrapper above — AmbientBackground.tsx's
+        IntersectionObserver needs an element whose visibility ratio can
+        actually reach ~1 while the hero is active. The wrapper can only
+        ever show ~40% of itself (100dvh visible out of its own 250dvh),
+        so it would never cross the observer's 0.5 threshold on the way
+        back up, leaving the desktop gutter stuck on the previous
+        section's color when scrolling back toward the top. */}
     <section
+      id="hero"
       ref={sectionRef}
       className="sticky top-0 h-[100dvh] w-full overflow-hidden"
       aria-label="Lever de soleil sur la mer"
