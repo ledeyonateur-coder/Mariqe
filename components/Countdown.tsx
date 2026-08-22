@@ -178,7 +178,7 @@ export default function Countdown() {
           </p>
 
           <div className="flex max-w-xs flex-col gap-3 lg:max-w-md">
-            <h2 className="whitespace-pre-line font-display text-xl leading-snug text-ink sm:text-2xl lg:text-3xl">
+            <h2 className="whitespace-pre-line font-wordmark text-xl leading-snug text-ink sm:text-2xl lg:text-3xl">
               {headlineMain}
             </h2>
             {headlineSub && (
