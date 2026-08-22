@@ -133,7 +133,7 @@ export default function Countdown() {
   return (
     <section
       id="countdown"
-      className="relative flex min-h-[100dvh] w-full flex-col items-center justify-start overflow-hidden bg-dusty-pink px-6 pb-16 pt-24 text-center"
+      className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center overflow-hidden bg-dusty-pink px-6 py-24 text-center"
       aria-label="Compte à rebours avant le prochain drop"
     >
       <AnimatePresence>
@@ -198,18 +198,23 @@ export default function Countdown() {
             <CountUnit value={time?.seconds ?? 0} label="SEC" reducedMotion={reducedMotion} />
           </div>
 
-          <div className="flex max-w-xs flex-col items-center gap-3 lg:max-w-md">
+          <div className="flex max-w-xs flex-col items-center gap-4 lg:max-w-md">
             {ctaBody && (
               <p className="whitespace-pre-line font-body text-xs leading-relaxed text-ink/70 lg:text-sm">{ctaBody}</p>
             )}
             <button
               type="button"
               onClick={handleSkip}
-              className="font-display text-xs font-semibold uppercase tracking-[0.15em] underline decoration-dashed underline-offset-4 text-ink transition-colors duration-300 ease-signature hover:text-rust-orange"
+              className="stitched-border bg-ink px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-[0.15em] text-paper transition-transform duration-300 ease-signature hover:scale-105 active:scale-95"
             >
-              {ctaLabel}
+              {ctaLabel} ↓
             </button>
           </div>
+
+          <span
+            aria-hidden="true"
+            className="h-px w-16 border-t-2 border-dashed border-ink/30"
+          />
         </motion.div>
 
         <motion.div
