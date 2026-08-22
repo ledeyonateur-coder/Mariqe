@@ -180,7 +180,7 @@ export default function SunriseHero() {
           instead of sitting as flat text above it. */}
       <div
         ref={wordmarkRef}
-        className="pointer-events-none absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 [--arc-radius:4.75rem] lg:h-36 lg:w-36 lg:[--arc-radius:7rem]"
+        className="pointer-events-none absolute left-1/2 top-[62%] h-24 w-24 -translate-x-1/2 [--arc-radius:5.5rem] lg:h-36 lg:w-36 lg:[--arc-radius:8rem]"
         style={{
           opacity: reducedMotion ? 1 : 0,
           transform: reducedMotion ? "translate(-50%, -170%)" : undefined,
@@ -193,7 +193,7 @@ export default function SunriseHero() {
           return (
             <span
               key={index}
-              className="absolute left-1/2 top-1/2 font-wordmark text-3xl leading-none text-[#8098DD] lg:text-4xl"
+              className="absolute left-1/2 top-1/2 font-wordmark text-4xl leading-none text-[#8098DD] lg:text-5xl"
               style={{ transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * var(--arc-radius)))` }}
             >
               {letter}
