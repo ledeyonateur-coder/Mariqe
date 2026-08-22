@@ -1,5 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#12141C"/>
-  <circle cx="32" cy="38" r="16" fill="#F3B23E"/>
-  <rect y="46" width="64" height="18" fill="#12141C"/>
+  <title>Soleil</title>
+  <rect width="64" height="64" rx="14" fill="#12141C"/>
+  <defs>
+    <linearGradient id="sunGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3B23E"/>
+      <stop offset="1" stop-color="#FF6B3D"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(32,32)" stroke="#F3B23E" stroke-width="4" stroke-linecap="round">
+    <line x1="0" y1="-15" x2="0" y2="-23"/>
+    <line x1="0" y1="-15" x2="0" y2="-23" transform="rotate(45)"/>
+    <line x1="0" y1="-15" x2="0" y2="-23" transform="rotate(90)"/>
+    <line x1="0" y1="-15" x2="0" y2="-23" transform="rotate(135)"/>
+    <line x1="0" y1="-15" x2="0" y2="-23" transform="rotate(180)"/>
+    <line x1="0" y1="-15" x2="0" y2="-23" transform="rotate(225)"/>
+    <line x1="0" y1="-15" x2="0" y2="-23" transform="rotate(270)"/>
+    <line x1="0" y1="-15" x2="0" y2="-23" transform="rotate(315)"/>
+  </g>
+  <circle cx="32" cy="32" r="13" fill="url(#sunGrad)"/>
 </svg>
