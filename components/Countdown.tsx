@@ -133,7 +133,7 @@ export default function Countdown() {
   return (
     <section
       id="countdown"
-      className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center overflow-hidden bg-dusty-pink px-6 py-24 text-center"
+      className="relative flex min-h-[100svh] w-full flex-col items-center justify-center overflow-hidden bg-dusty-pink px-6 py-24 text-center"
       aria-label="Compte à rebours avant le prochain drop"
     >
       <AnimatePresence>
