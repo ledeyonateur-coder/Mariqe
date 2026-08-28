@@ -10,6 +10,11 @@ let registered = false;
 export function registerScrollAnimations() {
   if (registered || typeof window === "undefined") return gsap;
   gsap.registerPlugin(ScrollTrigger);
+  // The mobile browser toolbar collapsing/expanding fires resize events
+  // mid-scroll; a full ScrollTrigger refresh at that moment recomputes all
+  // trigger positions and visibly jolts the page. Ignore those resizes —
+  // section heights are in svh so they don't actually change anyway.
+  ScrollTrigger.config({ ignoreMobileResize: true });
   registered = true;
   return gsap;
 }

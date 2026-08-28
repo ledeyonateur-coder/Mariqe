@@ -33,15 +33,26 @@ export default function ProductShowcase() {
   return (
     <section
       id="collection"
-      className="relative h-[100dvh] w-full bg-cream-khaki"
+      className="relative h-[100svh] w-full bg-cream-khaki"
       aria-label="La collection — 6 pièces, glisser pour découvrir"
     >
+      {/* overscroll-x-contain only — NOT overscroll-contain. Containing both
+          axes stops vertical scroll from chaining to the page, which freezes
+          the whole site while the pointer is over the carousel. Horizontal
+          containment alone keeps a swipe from triggering browser back-nav. */}
       <div
         ref={containerRef}
-        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
+        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
       >
         {products.map((product, index) => (
-          <div key={product.id} className="h-full w-full flex-shrink-0 snap-start [scroll-snap-stop:always]">
+          // overflow-hidden matters: ProductWindow's entry animation starts at
+          // translateY(24px), so every off-screen slide hung 24px below its
+          // wrapper. That made the carousel a *vertical* scroll container,
+          // which ate vertical swipes and jerked the page toward the bottom.
+          <div
+            key={product.id}
+            className="h-full w-full flex-shrink-0 overflow-hidden snap-start [scroll-snap-stop:always]"
+          >
             <ProductWindow product={withLiveStock(product, stockOverrides)} index={index} />
           </div>
         ))}

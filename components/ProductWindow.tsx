@@ -43,7 +43,7 @@ export default function ProductWindow({ product, index }: { product: Product; in
 
   return (
     <motion.article
-      className="relative flex h-[100dvh] w-full flex-col items-center justify-center gap-4 px-6 py-12 lg:gap-5 lg:py-14"
+      className="relative flex h-full w-full flex-col items-center justify-center gap-4 overflow-hidden px-6 py-12 lg:gap-5 lg:py-14"
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ amount: 0.5, once: false }}

@@ -136,8 +136,14 @@ export default function SunriseHero() {
     };
   }, [reducedMotion]);
 
+  // svh (small viewport height), not dvh: dvh re-evaluates live as the
+  // mobile browser toolbar collapses while scrolling, so a 250dvh spacer
+  // suddenly grows/shrinks by several hundred px mid-scroll — the page
+  // visibly "jumps" around the countdown/collection boundary. svh is a
+  // fixed value (viewport with toolbar visible), so section heights never
+  // change during the scroll.
   return (
-    <div ref={wrapperRef} className={`relative w-full ${reducedMotion ? "h-[100dvh]" : "h-[250dvh]"}`}>
+    <div ref={wrapperRef} className={`relative w-full ${reducedMotion ? "h-[100svh]" : "h-[250svh]"}`}>
     {/* id="hero" lives on this sticky 100dvh section, not the 250dvh
         scroll-spacer wrapper above — AmbientBackground.tsx's
         IntersectionObserver needs an element whose visibility ratio can
@@ -149,7 +155,7 @@ export default function SunriseHero() {
     <section
       id="hero"
       ref={sectionRef}
-      className="sticky top-0 h-[100dvh] w-full overflow-hidden"
+      className="sticky top-0 h-[100svh] w-full overflow-hidden"
       aria-label="Lever de soleil sur la mer"
     >
       {SKY_STAGES.map((background, index) => (
