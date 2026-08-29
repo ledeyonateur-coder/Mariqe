@@ -237,6 +237,8 @@ def run(
     keep_bg: bool,
     simplify: float,
     mono: str | None = None,
+    hoop: tuple[float, float] | None = None,
+    fit_hoop: bool = False,
 ):
     os.makedirs(outdir, exist_ok=True)
     img = Image.open(src)
@@ -295,6 +297,31 @@ def run(
         # Sew the biggest areas first, fine detail last -- standard practice so
         # the detail sits on top instead of being buried.
         layers.sort(key=lambda L: -L.coverage)
+
+    # Hoop check. A design wider than the hoop simply cannot be stitched, and
+    # the machine will refuse the file (or silently clip it), so catch it here
+    # rather than at the machine. Checked in both orientations.
+    height_mm_req = width_mm * H / W
+    if hoop:
+        hw, hh = hoop
+        fits = (width_mm <= hw and height_mm_req <= hh) or (
+            width_mm <= hh and height_mm_req <= hw
+        )
+        if not fits:
+            scale = max(
+                min(hw / width_mm, hh / height_mm_req),
+                min(hh / width_mm, hw / height_mm_req),
+            )
+            new_w = width_mm * scale
+            print(
+                f"  ! {width_mm:.0f} x {height_mm_req:.0f} mm ne rentre pas dans "
+                f"le cadre {hw:.0f} x {hh:.0f} mm"
+            )
+            if fit_hoop:
+                width_mm = new_w
+                print(f"  -> reduit a {width_mm:.1f} x {width_mm * H / W:.1f} mm")
+            else:
+                print(f"  -> utiliser --fit-hoop (donnerait {new_w:.1f} mm) ou --width-mm {new_w:.0f}")
 
     px_per_mm = W / width_mm
     px_to_units = 10.0 / px_per_mm           # px -> 0.1 mm machine units
@@ -424,6 +451,8 @@ def main():
     ap.add_argument("--min-area", type=int, default=60)
     ap.add_argument("--keep-background", action="store_true")
     ap.add_argument("--simplify", type=float, default=0.8)
+    ap.add_argument("--hoop", metavar="WxH", help="cadre en mm, ex. 100x170")
+    ap.add_argument("--fit-hoop", action="store_true", help="reduire pour entrer dans le cadre")
     ap.add_argument(
         "--mono",
         metavar="HEX",
@@ -434,6 +463,8 @@ def main():
     chart = run(
         a.input, a.out, a.colors, a.width_mm, a.density_mm,
         a.max_stitch_mm, a.min_area, a.keep_background, a.simplify, a.mono,
+        tuple(float(v) for v in a.hoop.lower().split("x")) if a.hoop else None,
+        a.fit_hoop,
     )
     print(chart)
     print(f"\n-> {a.out}/")
