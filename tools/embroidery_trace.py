@@ -236,6 +236,7 @@ def run(
     min_area: int,
     keep_bg: bool,
     simplify: float,
+    mono: str | None = None,
 ):
     os.makedirs(outdir, exist_ok=True)
     img = Image.open(src)
@@ -246,24 +247,54 @@ def run(
         img = flat
     W, H = img.size
 
+    # Crop to the artwork's own bounding box first. Without this, --width-mm
+    # would scale the *canvas* (white margins included) and the stitched motif
+    # would come out smaller than asked -- e.g. 104 mm instead of the 120 mm
+    # the operator typed.
+    arr0 = np.asarray(img)
+    content = ~np.all(arr0 >= 229, axis=2)
+    cys, cxs = np.nonzero(content)
+    if cys.size:
+        img = img.crop((int(cxs.min()), int(cys.min()), int(cxs.max()) + 1, int(cys.max()) + 1))
+        W, H = img.size
+
     idx, palette = quantise(img, n_colors)
 
     layers: list[Layer] = []
     total_px = W * H
-    for i, rgb in enumerate(palette):
-        mask = idx == i
-        if not mask.any():
-            continue
-        if not keep_bg and is_background(rgb):
-            continue
-        mask = despeckle(mask, min_area)
-        if not mask.any():
-            continue
-        layers.append(Layer(index=i, rgb=rgb, mask=mask, coverage=100.0 * mask.sum() / total_px))
 
-    # Sew the biggest areas first, fine detail last -- standard practice so the
-    # detail sits on top instead of being buried.
-    layers.sort(key=lambda L: -L.coverage)
+    if mono:
+        # Single-thread test run: everything that isn't background becomes one
+        # mask sewn in one colour. This is what you stitch out first to check
+        # placement and density on real fabric before committing to a
+        # multi-colour run with all the thread changes.
+        rgb = tuple(int(mono.lstrip("#")[i: i + 2], 16) for i in (0, 2, 4))
+        mask = np.zeros((H, W), dtype=bool)
+        for i, prgb in enumerate(palette):
+            if keep_bg or not is_background(prgb):
+                mask |= idx == i
+        mask = despeckle(mask, min_area)
+        if mask.any():
+            layers.append(
+                Layer(index=0, rgb=rgb, mask=mask, coverage=100.0 * mask.sum() / total_px)
+            )
+    else:
+        for i, rgb in enumerate(palette):
+            mask = idx == i
+            if not mask.any():
+                continue
+            if not keep_bg and is_background(rgb):
+                continue
+            mask = despeckle(mask, min_area)
+            if not mask.any():
+                continue
+            layers.append(
+                Layer(index=i, rgb=rgb, mask=mask, coverage=100.0 * mask.sum() / total_px)
+            )
+
+        # Sew the biggest areas first, fine detail last -- standard practice so
+        # the detail sits on top instead of being buried.
+        layers.sort(key=lambda L: -L.coverage)
 
     px_per_mm = W / width_mm
     px_to_units = 10.0 / px_per_mm           # px -> 0.1 mm machine units
@@ -393,11 +424,16 @@ def main():
     ap.add_argument("--min-area", type=int, default=60)
     ap.add_argument("--keep-background", action="store_true")
     ap.add_argument("--simplify", type=float, default=0.8)
+    ap.add_argument(
+        "--mono",
+        metavar="HEX",
+        help="test un seul fil : tout le motif dans cette couleur (ex. #D8432E)",
+    )
     a = ap.parse_args()
 
     chart = run(
         a.input, a.out, a.colors, a.width_mm, a.density_mm,
-        a.max_stitch_mm, a.min_area, a.keep_background, a.simplify,
+        a.max_stitch_mm, a.min_area, a.keep_background, a.simplify, a.mono,
     )
     print(chart)
     print(f"\n-> {a.out}/")
