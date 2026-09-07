@@ -1,4 +1,8 @@
-export const DROP_DATE = "2026-09-02T00:00:00+02:00";
+// /!\ A METTRE A JOUR AVANT CHAQUE DROP.
+// Quand cette date est depassee, le compte a rebours disparait et laisse
+// place a la revelation du logo (voir components/Countdown.tsx). C'est voulu,
+// mais ca veut dire qu'une date passee "efface" le compteur du site.
+export const DROP_DATE = "2026-10-01T00:00:00+02:00";
 
 export const BRAND_NAME = "SOLEIL";
 
