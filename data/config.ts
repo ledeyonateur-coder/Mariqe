@@ -21,9 +21,11 @@ AVANT LE PROCHAIN DROP    COLLECTION CI-DESSOUS `,
   },
   footer: {
     tagline: "Atelier de couture Privé à Villefranche-de-Rouergue.",
+    // Facebook retire tant qu'il n'y a pas de compte : le lien pointait sur
+    // le gabarit {{HANDLE}}, donc sur une page inexistante. Pour le remettre,
+    // rajouter une ligne ici avec le vrai pseudo.
     social: [
-      { label: "Instagram", href: "https://instagram.com/{{HANDLE}}" },
-      { label: "Facebook", href: "https://facebook.com/{{HANDLE}}" },
+      { label: "Instagram", href: "https://instagram.com/soleil.upcycling" },
     ],
   },
 };
