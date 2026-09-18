@@ -1,6 +1,7 @@
 import SunriseHero from "@/components/SunriseHero";
 import Countdown from "@/components/Countdown";
 import ProductShowcase from "@/components/ProductShowcase";
+import Friperie from "@/components/Friperie";
 import Footer from "@/components/Footer";
 import AmbientBackground from "@/components/AmbientBackground";
 
@@ -11,6 +12,7 @@ export default function Home() {
       <SunriseHero />
       <Countdown />
       <ProductShowcase />
+      <Friperie />
       <Footer />
     </>
   );

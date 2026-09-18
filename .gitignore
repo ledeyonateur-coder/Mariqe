@@ -36,3 +36,4 @@ dist
 # Env
 .env*.local
 .env
+tsconfig.tsbuildinfo
