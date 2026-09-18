@@ -67,8 +67,11 @@ function CategoryCard({ category, index }: { category: FriperieCategory; index: 
       className="flex h-full flex-col"
       initial={reducedMotion ? false : { opacity: 0, y: 16 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ amount: 0.4, once: true }}
-      transition={{ duration: 0.5, ease: EASE, delay: reducedMotion ? 0 : index * 0.05 }}
+      // Le decalage se fait par colonne (0 ou 0.05 s), pas par index : avec
+      // index * 0.05 la 8e tuile demarrait 0,35 s apres la premiere et
+      // n'avait pas fini d'apparaitre quand on etait deja passe devant.
+      viewport={{ amount: 0.2, once: true }}
+      transition={{ duration: 0.4, ease: EASE, delay: reducedMotion ? 0 : (index % 2) * 0.05 }}
     >
       {/* Une categorie vide ne mene nulle part : la tuile reste une carte
           morte plutot qu'un lien vers une page "aucune piece". */}
