@@ -46,7 +46,11 @@ export default function ProductWindow({ product, index }: { product: Product; in
       className="relative flex h-full w-full flex-col items-center justify-center gap-4 overflow-hidden px-6 py-12 lg:gap-5 lg:py-14"
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ amount: 0.5, once: false }}
+      // once: true est essentiel. Avec once: false, l'article repassait sous
+      // le seuil de visibilite des qu'on scrollait un peu, rejouait son
+      // animation d'entree a l'envers puis a l'endroit : la piece
+      // disparaissait et revenait 3 fois pendant une seule descente de page.
+      viewport={{ amount: 0.3, once: true }}
       transition={{ duration: 0.6, ease: EASE }}
     >
       <span className="font-display text-xs tracking-[0.3em] text-ink/50">
