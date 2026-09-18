@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 const SECTION_BACKDROPS: Record<string, string> = {
   countdown: "#8098DD",
   collection: "#E7DEC4",
+  friperie: "#F6F2E9",
   footer: "#12141c",
 };
 
@@ -15,7 +16,7 @@ export default function AmbientBackground() {
   const activeOverlay = useRef<"a" | "b" | null>(null);
 
   useEffect(() => {
-    const sectionIds = ["hero", "countdown", "collection", "footer"];
+    const sectionIds = ["hero", "countdown", "collection", "friperie", "footer"];
     const sections = sectionIds
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
