@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { friperieCategories, type FriperieCategory } from "@/data/friperie";
+import { availableCount, friperieCategories, piecesOf, type FriperieCategory } from "@/data/friperie";
 import { useReducedMotion } from "@/lib/scrollAnimations";
 
 const EASE = [0.65, 0, 0.35, 1] as const;
@@ -23,16 +23,42 @@ const ACCENT_BG: Record<FriperieCategory["accent"], string> = {
 
 function CategoryCard({ category, index }: { category: FriperieCategory; index: number }) {
   const reducedMotion = useReducedMotion();
-  const empty = category.pieces <= 0;
+  const pieces = piecesOf(category.id);
+  const available = availableCount(category.id);
+  const cover = pieces[0]?.image;
 
   const inner = (
     <>
-      <span aria-hidden="true" className={`h-1.5 w-8 rounded-full ${ACCENT_BG[category.accent]}`} />
-      <h3 className="font-display text-sm leading-tight text-ink lg:text-base">{category.name}</h3>
-      <p className="font-body text-[0.7rem] leading-relaxed text-ink/60 lg:text-xs">{category.description}</p>
-      <span className="mt-auto font-body text-[0.6rem] tracking-[0.2em] text-ink/45">
-        {empty ? "BIENTÔT" : `${category.pieces} PIÈCE${category.pieces > 1 ? "S" : ""}`}
-      </span>
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-paper">
+        {cover ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cover}
+              alt={`Aperçu ${category.name}`}
+              className="h-full w-full object-cover"
+              loading={index < 2 ? "eager" : "lazy"}
+            />
+            {pieces.length > 1 && (
+              <span className="absolute bottom-1.5 right-1.5 bg-ink/70 px-1.5 py-0.5 font-body text-[0.55rem] tracking-widest text-paper">
+                +{pieces.length - 1}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="flex h-full w-full items-center justify-center font-body text-[0.6rem] tracking-[0.2em] text-ink/35">
+            PHOTO À VENIR
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        <span aria-hidden="true" className={`h-1.5 w-8 rounded-full ${ACCENT_BG[category.accent]}`} />
+        <h3 className="font-display text-sm leading-tight text-ink lg:text-base">{category.name}</h3>
+        <span className="mt-auto font-body text-[0.6rem] tracking-[0.2em] text-ink/45">
+          {available > 0 ? `${available} PIÈCE${available > 1 ? "S" : ""}` : "BIENTÔT"}
+        </span>
+      </div>
     </>
   );
 
@@ -44,15 +70,17 @@ function CategoryCard({ category, index }: { category: FriperieCategory; index: 
       viewport={{ amount: 0.4, once: true }}
       transition={{ duration: 0.5, ease: EASE, delay: reducedMotion ? 0 : index * 0.05 }}
     >
-      {category.href ? (
+      {/* Une categorie vide ne mene nulle part : la tuile reste une carte
+          morte plutot qu'un lien vers une page "aucune piece". */}
+      {pieces.length > 0 ? (
         <Link
-          href={category.href}
-          className="stitched-border flex h-full flex-col gap-2 bg-cream-khaki p-4 transition-transform duration-300 ease-signature hover:scale-[1.03] active:scale-95"
+          href={`/friperie/${category.id}`}
+          className="stitched-border flex h-full flex-col overflow-hidden bg-cream-khaki transition-transform duration-300 ease-signature hover:scale-[1.03] active:scale-95"
         >
           {inner}
         </Link>
       ) : (
-        <div className="stitched-border flex h-full flex-col gap-2 bg-cream-khaki p-4">{inner}</div>
+        <div className="stitched-border flex h-full flex-col overflow-hidden bg-cream-khaki">{inner}</div>
       )}
     </motion.article>
   );
