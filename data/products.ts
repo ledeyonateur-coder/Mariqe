@@ -71,7 +71,7 @@ export const products: Product[] = [
   },
   {
     id: "bob-brut-06",
-    name: "BIENTÔT"
+    name: "BIENTÔT",
     price: 0,
     description: "Bob réversible, deux motifs patchwork en un.",
     image: "/products/placeholder-06.svg",
