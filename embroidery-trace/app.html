@@ -6,6 +6,10 @@
   <title>Éditeur — FilTrace</title>
   <meta name="description" content="Transformez une image en fichier de broderie DST, PES, JEF, EXP ou VP3 directement dans votre navigateur." />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <meta name="theme-color" content="#1d1a16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -26,7 +30,8 @@
         Ouvrir<input type="file" id="projectInput" accept=".json,.filtrace" hidden />
       </label>
       <button class="btn ghost" id="btnSaveProject" disabled>Enregistrer</button>
-      <button class="btn primary" id="btnExport" disabled>Exporter</button>
+      <button class="btn ghost" id="btnExport" disabled>Exporter…</button>
+      <button class="btn primary" id="btnQuick" disabled>⬇ Fichier machine</button>
     </div>
   </header>
 
@@ -84,16 +89,12 @@
           </div>
         </div>
         <div class="field">
-          <label for="hoop">Cadre de la machine</label>
-          <select id="hoop">
-            <option value="100x100">100 × 100 mm (4″ × 4″)</option>
-            <option value="130x180" selected>130 × 180 mm (5″ × 7″)</option>
-            <option value="160x260">160 × 260 mm (6″ × 10″)</option>
-            <option value="200x200">200 × 200 mm (8″ × 8″)</option>
-            <option value="200x300">200 × 300 mm (8″ × 12″)</option>
-            <option value="240x360">240 × 360 mm (9,5″ × 14″)</option>
-            <option value="none">Aucun</option>
-          </select>
+          <label for="machine">Ma machine</label>
+          <select id="machine"></select>
+        </div>
+        <div class="field">
+          <label for="hoop">Cadre</label>
+          <select id="hoop"></select>
         </div>
         <div class="hoop-status" id="hoopStatus"></div>
         <button class="btn small ghost full" id="btnFitHoop" hidden>Ajuster au cadre</button>
@@ -173,7 +174,11 @@
         <label for="designName">Nom du motif</label>
         <input type="text" id="designName" maxlength="16" value="motif" />
       </div>
-      <p class="hint">Fichiers machine</p>
+      <div class="machine-box" id="machineBox">
+        <button type="button" class="btn primary large full" id="btnMachineDownload">⬇ Télécharger</button>
+        <p class="hint" id="machineHelp"></p>
+      </div>
+      <p class="hint">Tous les formats machine</p>
       <div class="formats" id="formatButtons"></div>
       <p class="hint">Autres fichiers</p>
       <div class="formats">

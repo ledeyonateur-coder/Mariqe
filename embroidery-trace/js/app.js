@@ -8,6 +8,7 @@ import { PEC_THREADS, JEF_THREADS, nearestThreadIndex, nearestThreadName, hexToR
 import { loopsToPath } from "./core/trace.js";
 import { FORMATS, writeFormat } from "./formats/writers.js";
 import { makeZip } from "./core/zip.js";
+import { MACHINES, DEFAULT_MACHINE, machineFileName } from "./machines.js";
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -31,7 +32,8 @@ const state = {
   pattern: null,
   patternScale: 1,
   widthMm: 100,
-  hoop: "130x180",
+  machine: DEFAULT_MACHINE,
+  hoop: MACHINES[DEFAULT_MACHINE].hoops[0],
   view: "stitch",
   tool: "pan",
   brush: 10,
@@ -981,6 +983,7 @@ function refreshUI() {
   }
   $("#btnFitHoop").hidden = fits;
   $("#btnExport").disabled = !state.pattern || !state.pattern.stats.stitchCount;
+  $("#btnQuick").disabled = $("#btnExport").disabled;
   $("#btnSaveProject").disabled = !state.labels;
   const total = state.pattern ? state.pattern.stitches.length : 0;
   $("#progress").max = total;
@@ -1053,6 +1056,38 @@ $("#heightMm").addEventListener("change", (e) => {
   refreshUI();
   scheduleStitch(0);
 });
+const HOOP_LABEL = (h) => {
+  const [w, hh] = h.split("x").map(Number);
+  return `${w} × ${hh} mm (${fmt(w / 25.4, 1)}″ × ${fmt(hh / 25.4, 1)}″)`;
+};
+
+function fillMachineUI() {
+  $("#machine").innerHTML = Object.entries(MACHINES)
+    .map(([k, m]) => `<option value="${k}">${m.label} — .${m.format.toUpperCase()}</option>`)
+    .join("");
+  $("#machine").value = state.machine;
+  const m = MACHINES[state.machine];
+  if (!m.hoops.includes(state.hoop) && state.hoop !== "none") state.hoop = m.hoops[0];
+  $("#hoop").innerHTML = m.hoops.map((h) => `<option value="${h}">${HOOP_LABEL(h)}</option>`).join("") + `<option value="none">Aucun</option>`;
+  $("#hoop").value = state.hoop;
+  const ext = m.format.toUpperCase();
+  $("#btnQuick").textContent = `⬇ Fichier .${ext}`;
+  $("#btnQuick").title = `Télécharger pour ${m.label}`;
+  $("#btnMachineDownload").textContent = `⬇ Télécharger pour ${m.label} (.${ext})`;
+  $("#machineHelp").textContent = m.usb;
+}
+
+$("#machine").addEventListener("change", (e) => {
+  state.machine = e.target.value;
+  try {
+    localStorage.setItem("filtrace.machine", state.machine);
+  } catch {}
+  state.hoop = MACHINES[state.machine].hoops[0];
+  fillMachineUI();
+  refreshUI();
+  fitView();
+});
+
 $("#hoop").addEventListener("change", (e) => {
   state.hoop = e.target.value;
   refreshUI();
@@ -1279,6 +1314,16 @@ $("#exportDialog").addEventListener("click", (e) => {
   }
 });
 
+function downloadForMachine() {
+  if (!state.pattern) return;
+  const m = MACHINES[state.machine];
+  const name = designName();
+  if (!fitsHoop() && !confirm("Le motif est plus grand que le cadre choisi : la machine risque de le refuser. Télécharger quand même ?")) return;
+  download(writeFormat(m.format, state.pattern, name, { trims: m.trims !== false }), machineFileName(state.machine, name));
+}
+$("#btnQuick").addEventListener("click", downloadForMachine);
+$("#btnMachineDownload").addEventListener("click", downloadForMachine);
+
 $("#btnExport").addEventListener("click", () => {
   const s = state.pattern.stats;
   $("#exportSummary").textContent = `${fmt(s.stitchCount)} points · ${s.colors} couleur(s) · ${fmt(s.widthMm, 1)} × ${fmt(s.heightMm, 1)} mm${
@@ -1316,6 +1361,7 @@ $("#btnSaveProject").addEventListener("click", () => {
     settings: state.settings,
     widthMm: state.widthMm,
     hoop: state.hoop,
+    machine: state.machine,
     fabric: state.fabric,
   };
   download(JSON.stringify(project), `${designName()}.filtrace.json`, "application/json");
@@ -1350,6 +1396,7 @@ $("#projectInput").addEventListener("change", async (e) => {
       settings: { ...DEFAULT_SETTINGS, ...project.settings },
       widthMm: project.widthMm,
       hoop: project.hoop,
+      machine: MACHINES[project.machine] ? project.machine : state.machine,
       fabric: project.fabric || state.fabric,
       selected: project.layers[0]?.id ?? null,
       undo: [],
@@ -1375,7 +1422,7 @@ function syncSettingsUI() {
     $("#" + k + "Out").textContent = state.settings[k];
   }
   $("#removeBg").checked = state.settings.removeBackground;
-  $("#hoop").value = state.hoop;
+  fillMachineUI();
   $("#fabric").value = state.fabric;
 }
 
@@ -1384,6 +1431,16 @@ function syncSettingsUI() {
 new ResizeObserver(() => {
   resizeCanvas();
 }).observe($("#canvasWrap"));
+try {
+  const saved = localStorage.getItem("filtrace.machine");
+  if (MACHINES[saved]) {
+    state.machine = saved;
+    state.hoop = MACHINES[saved].hoops[0];
+  }
+} catch {}
 syncSettingsUI();
 setView("stitch");
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 if (new URLSearchParams(location.search).has("exemple")) loadSample();

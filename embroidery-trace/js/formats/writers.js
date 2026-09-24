@@ -168,12 +168,14 @@ export function writeDST(pattern, name = "Design") {
 }
 
 // ------------------------------------------------------------------ EXP
-export function writeEXP(pattern) {
+export function writeEXP(pattern, name, { trims = true } = {}) {
+  // Sans coupe-fil (ex. bernette Chicago 7), on n'écrit pas les coupes :
+  // la machine fait les sauts et on coupe les fils à la main.
   const b = new Bytes();
   for (const [dx, dy, c] of deltas(pattern.stitches)) {
     if (c === STITCH) b.bytes([dx & 0xff, -dy & 0xff]);
     else if (c === JUMP) b.bytes([0x80, 0x04, dx & 0xff, -dy & 0xff]);
-    else if (c === TRIM) b.bytes([0x80, 0x80, 0x07, 0x00]);
+    else if (c === TRIM && trims) b.bytes([0x80, 0x80, 0x07, 0x00]);
     else if (c === COLOR_CHANGE) b.bytes([0x80, 0x01, 0x00, 0x00]);
   }
   return b.result();
@@ -503,12 +505,14 @@ export const FORMATS = {
   dst: { label: "DST", machine: "Tajima, Barudan, machines pro", write: writeDST },
   pes: { label: "PES", machine: "Brother, Baby Lock, Bernette", write: writePES },
   jef: { label: "JEF", machine: "Janome, Elna, Kenmore", write: writeJEF },
-  exp: { label: "EXP", machine: "Melco, Bernina", write: writeEXP },
+  exp: { label: "EXP", machine: "bernette Chicago, Bernina, Melco", write: writeEXP },
   vp3: { label: "VP3", machine: "Pfaff, Husqvarna Viking", write: writeVP3 },
 };
 
-export function writeFormat(ext, pattern, name) {
+export function writeFormat(ext, pattern, name, options = {}) {
   const f = FORMATS[ext];
   if (!f) throw new Error(`Format inconnu : ${ext}`);
-  return ext === "jef" ? f.write(pattern) : f.write(pattern, name);
+  if (ext === "jef") return f.write(pattern);
+  if (ext === "exp") return f.write(pattern, name, options);
+  return f.write(pattern, name);
 }

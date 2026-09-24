@@ -8,6 +8,22 @@ point, et on exporte un fichier pour brodeuse numérique.
 Tout tourne **dans le navigateur** (HTML/CSS/JS sans dépendance ni build) :
 l'image n'est jamais envoyée sur un serveur.
 
+## bernette Chicago 7
+
+La machine par défaut est la **bernette Chicago 7** (réglable dans « Ma machine ») :
+format **.EXP** (le seul qu'elle lit), cadres 110×170, 100×100 et 40×40 mm, pas
+de commande de coupe dans le fichier (la machine n'a pas de coupe-fil
+automatique) et nom de fichier court en majuscules (`MOTIF.EXP`). Le bouton
+« ⬇ Fichier .EXP » en haut à droite télécharge directement le fichier à copier
+sur la clé USB. D'autres profils existent : Bernina, Brother, Janome,
+Pfaff/Husqvarna, machines pro.
+
+## Application installable
+
+Le site est une PWA (`manifest.webmanifest`, `sw.js`) : une fois en ligne en
+HTTPS, « Installer l'application » (ordinateur) ou « Ajouter à l'écran
+d'accueil » (téléphone) l'installe comme une app, utilisable hors connexion.
+
 ## Pages
 
 - `index.html` — page de présentation (étapes, fonctions, types de points, formats, FAQ).
@@ -62,6 +78,8 @@ npm test
 index.html, app.html     pages
 css/                     style.css (commun + landing), app.css (éditeur)
 js/app.js                interface de l'éditeur
+js/machines.js           profils machines (Chicago 7, Bernina, Brother…)
+manifest.webmanifest, sw.js   application installable / hors ligne
 js/core/quantize.js      réduction des couleurs, fond, nettoyage
 js/core/trace.js         contours vectoriels (suivi des bords, Chaikin, RDP)
 js/core/stitch.js        remplissage tatami, satin, point droit, assemblage machine
