@@ -38,6 +38,9 @@ const state = {
   style: "fill", // fill | outline | outline1
   outlineColor: "#1D1A16",
   outlineTriple: false,
+  outlineLength: 2.5,
+  spacing: DEFAULT_LAYER.density, // espacement global entre les rangs (mm)
+  stitchLength: DEFAULT_LAYER.stitchLength,
   original: null, // image importée, avant recadrage
   hoop: MACHINES[DEFAULT_MACHINE].hoops[0],
   view: "stitch",
@@ -275,6 +278,10 @@ function runAnalyze({ fitSize = false } = {}) {
   withBusy(() => {
     const { labels, layers, background } = analyzeImage(state.rgba, state.w, state.h, state.settings);
     state.labels = labels;
+    for (const L of layers) {
+      L.density = state.spacing;
+      L.stitchLength = state.stitchLength;
+    }
     state.layers = layers;
     state.background = background;
     state.selected = (layers.find((L) => L.type !== "none") || layers[0] || {}).id ?? null;
@@ -305,6 +312,7 @@ function stitchNow() {
     style: state.style,
     outlineColor: state.outlineColor,
     outlineTriple: state.outlineTriple,
+    outlineLength: state.outlineLength,
   });
   state.progress = state.pattern.stitches.length;
   stitchCache = null;
@@ -1168,12 +1176,43 @@ $("#fileFormat").addEventListener("change", (e) => {
 });
 
 function syncStyleUI() {
+  const outline = state.style !== "fill";
+  $("#spacingField").hidden = outline;
+  const len = outline ? state.outlineLength : state.stitchLength;
+  $("#stitchLen").value = len;
+  $("#stitchLenOut").textContent = len;
+  $("#spacing").value = state.spacing;
+  $("#spacingOut").textContent = state.spacing;
   $("#style").value = state.style;
   $("#outlineOpts").hidden = state.style === "fill";
   $("#outlineColorWrap").hidden = state.style !== "outline1";
   $("#outlineColor").value = state.outlineColor.toLowerCase();
   $("#outlineTriple").checked = state.outlineTriple;
 }
+// Réglages globaux : appliqués à tous les calques (modifiables ensuite calque par calque).
+for (const id of ["spacing", "stitchLen"]) {
+  $("#" + id).addEventListener("input", (e) => ($("#" + id + "Out").textContent = e.target.value));
+}
+$("#spacing").addEventListener("change", (e) => {
+  pushHistory();
+  state.spacing = Number(e.target.value);
+  for (const L of state.layers) L.density = state.spacing;
+  renderLayers();
+  scheduleStitch(0);
+});
+$("#stitchLen").addEventListener("change", (e) => {
+  const v = Number(e.target.value);
+  if (state.style !== "fill") {
+    state.outlineLength = v;
+  } else {
+    pushHistory();
+    state.stitchLength = v;
+    for (const L of state.layers) L.stitchLength = v;
+    renderLayers();
+  }
+  scheduleStitch(0);
+});
+
 $("#style").addEventListener("change", (e) => {
   state.style = e.target.value;
   syncStyleUI();
@@ -1469,6 +1508,9 @@ $("#btnSaveProject").addEventListener("click", () => {
     style: state.style,
     outlineColor: state.outlineColor,
     outlineTriple: state.outlineTriple,
+    outlineLength: state.outlineLength,
+    spacing: state.spacing,
+    stitchLength: state.stitchLength,
     fabric: state.fabric,
   };
   download(JSON.stringify(project), `${designName()}.filtrace.json`, "application/json");
@@ -1508,6 +1550,9 @@ $("#projectInput").addEventListener("change", async (e) => {
       style: project.style || "fill",
       outlineColor: project.outlineColor || state.outlineColor,
       outlineTriple: !!project.outlineTriple,
+      outlineLength: project.outlineLength || 2.5,
+      spacing: project.spacing || DEFAULT_LAYER.density,
+      stitchLength: project.stitchLength || DEFAULT_LAYER.stitchLength,
       original: img,
       fabric: project.fabric || state.fabric,
       selected: project.layers[0]?.id ?? null,

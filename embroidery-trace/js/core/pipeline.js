@@ -94,12 +94,12 @@ export function vectorizeAll(labels, w, h, layers, settings = {}) {
  *                       couleur par calque) ou "outline1" (contours d'un seul fil)
  */
 export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
-  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, ...buildOptions } = options;
+  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, outlineLength = 2.5, ...buildOptions } = options;
   const outline = style === "outline" || style === "outline1";
   let prepared = layers
     .filter((L) => L.visible && L.type !== "none")
     .map((L) => {
-      const cfg = outline ? { ...L, type: "running", triple: outlineTriple, stitchLength: 2.5 } : L;
+      const cfg = outline ? { ...L, type: "running", triple: outlineTriple, stitchLength: outlineLength } : L;
       const loops = (vectors.get(L.id) || []).map((loop) => loop.map(([x, y]) => [x * mmPerPx, y * mmPerPx]));
       return { color: L.color, name: L.name, id: L.id, runs: layerRuns(loops, cfg) };
     })

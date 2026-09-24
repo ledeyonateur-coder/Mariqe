@@ -311,3 +311,4 @@ body:not([data-view="stitch"]) .stage-foot { opacity: 0.55; }
   .topbar-actions { flex-wrap: wrap; }
   .zoom { margin-left: 0; }
 }
+.field[hidden] { display: none; }

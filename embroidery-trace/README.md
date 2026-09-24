@@ -39,6 +39,7 @@ d'accueil » (téléphone) l'installe comme une app, utilisable hors connexion.
 | Points | par calque : **Auto** (satin pour les formes étroites, remplissage pour les surfaces), Remplissage tatami, Satin, Point droit, Ignorer ; angle (ou auto), densité, longueur de point, compensation d'étirement, sous-couche, contour, point triple ; points d'arrêt et coupes de fil automatiques |
 | Édition manuelle | pinceau, gomme, pot de peinture, pipette, taille du pinceau, nouveau calque, fusion de calques, suppression, ordre de broderie, couleur libre ou nuancier Brother, masquer ; annuler / rétablir (Ctrl+Z / Ctrl+Maj+Z) |
 | Aperçu | vues Image / Couleurs / Vecteurs / Points, zoom et déplacement, rendu réaliste du fil sur la couleur du tissu, sauts affichables, **simulation animée** de la broderie |
+| Espacement | **espacement entre les fils** et longueur des points pour tout le motif (puis réglables calque par calque) ; longueur des points du contour en mode contours |
 | Fichier | type de fichier au choix (EXP, PES, JEF, DST, VP3), format recommandé selon la machine |
 | Taille | largeur / hauteur en mm, cadres 4×4 à 9,5×14, alerte si le motif dépasse, bouton « Ajuster au cadre » |
 | Export | **DST, PES, JEF, EXP, VP3**, SVG en calques (Inkscape / Ink/Stitch), PNG d'aperçu, fiche couleurs imprimable (fils Brother + Janome, points, métrage), ZIP de tout |
