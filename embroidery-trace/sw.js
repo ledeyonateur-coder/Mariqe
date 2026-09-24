@@ -1,5 +1,5 @@
 // Service worker : l'application fonctionne hors connexion une fois installée.
-const CACHE = "filtrace-v1";
+const CACHE = "filtrace-v2";
 const FILES = [
   "./",
   "index.html",
