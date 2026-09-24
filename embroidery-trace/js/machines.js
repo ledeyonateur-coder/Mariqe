@@ -46,11 +46,10 @@ export const MACHINES = {
 export const DEFAULT_MACHINE = "chicago7";
 
 /** Nom de fichier accepté par la machine. */
-export function machineFileName(machine, name) {
-  const m = MACHINES[machine];
-  if (m?.shortName) {
+export function machineFileName(machine, name, format = MACHINES[machine]?.format || "dst") {
+  if (MACHINES[machine]?.shortName) {
     const base = name.normalize("NFD").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 8) || "MOTIF";
-    return `${base}.${m.format.toUpperCase()}`;
+    return `${base}.${format.toUpperCase()}`;
   }
-  return `${name}.${m ? m.format : "dst"}`;
+  return `${name}.${format}`;
 }

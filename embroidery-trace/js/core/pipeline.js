@@ -90,18 +90,49 @@ export function vectorizeAll(labels, w, h, layers, settings = {}) {
  * @param layers  calques dans l'ordre de broderie
  * @param vectors Map id -> boucles en px
  * @param mmPerPx échelle
+ * @param options.style  "fill" (normal), "outline" (contours seulement, une
+ *                       couleur par calque) ou "outline1" (contours d'un seul fil)
  */
 export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
-  const prepared = layers
+  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, ...buildOptions } = options;
+  const outline = style === "outline" || style === "outline1";
+  let prepared = layers
     .filter((L) => L.visible && L.type !== "none")
     .map((L) => {
+      const cfg = outline ? { ...L, type: "running", triple: outlineTriple, stitchLength: 2.5 } : L;
       const loops = (vectors.get(L.id) || []).map((loop) => loop.map(([x, y]) => [x * mmPerPx, y * mmPerPx]));
-      return { color: L.color, name: L.name, id: L.id, runs: layerRuns(loops, L) };
+      return { color: L.color, name: L.name, id: L.id, runs: layerRuns(loops, cfg) };
     })
     .filter((L) => L.runs.length);
-  const pattern = buildPattern(prepared, options);
+  if (style === "outline1" && prepared.length) {
+    // Un seul fil : tous les contours à la suite, du plus proche au plus proche.
+    const runs = orderRuns(prepared.flatMap((L) => L.runs));
+    prepared = [{ color: outlineColor, name: "Contour", id: prepared[0].id, runs }];
+  }
+  const pattern = buildPattern(prepared, buildOptions);
   pattern.layerIds = prepared.map((L) => L.id);
   return pattern;
+}
+
+/** Enchaîne les tracés en allant toujours au départ le plus proche (moins de sauts). */
+function orderRuns(runs) {
+  const left = runs.slice();
+  const out = [];
+  let pos = null;
+  while (left.length) {
+    let bi = 0;
+    if (pos) {
+      let bd = Infinity;
+      left.forEach((r, i) => {
+        const d = Math.hypot(r[0][0] - pos[0], r[0][1] - pos[1]);
+        if (d < bd) (bd = d), (bi = i);
+      });
+    }
+    const [r] = left.splice(bi, 1);
+    out.push(r);
+    pos = r[r.length - 1];
+  }
+  return out;
 }
 
 /** Boîte englobante des pixels non transparents et hors fond. */

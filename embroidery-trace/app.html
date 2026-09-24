@@ -45,11 +45,26 @@
           <strong>Glissez une image ici</strong>
           <span>ou cliquez — PNG, JPG, SVG, WEBP<br />(vous pouvez aussi coller avec Ctrl+V)</span>
         </label>
-        <button class="btn small ghost full" id="btnSample">Essayer avec un exemple</button>
+        <div class="row-buttons">
+          <button class="btn small ghost" id="btnCrop" disabled>✂ Recadrer</button>
+          <button class="btn small ghost" id="btnSample">Exemple</button>
+        </div>
       </section>
 
       <section class="card" data-needs-image>
         <h2><span class="step">2</span> Couleurs</h2>
+        <div class="field">
+          <label for="style">Type de broderie</label>
+          <select id="style">
+            <option value="fill">Remplie (couleurs pleines)</option>
+            <option value="outline">Contours (chaque couleur)</option>
+            <option value="outline1">Contours (un seul fil)</option>
+          </select>
+        </div>
+        <div class="outline-opts" id="outlineOpts" hidden>
+          <label class="fabric" id="outlineColorWrap">Couleur du fil <input type="color" id="outlineColor" value="#1d1a16" /></label>
+          <label class="check small"><input type="checkbox" id="outlineTriple" /> Trait épais (point triple)</label>
+        </div>
         <div class="field">
           <label for="colors">Nombre de couleurs <output id="colorsOut">6</output></label>
           <input type="range" id="colors" min="2" max="16" value="6" />
@@ -95,6 +110,10 @@
         <div class="field">
           <label for="hoop">Cadre</label>
           <select id="hoop"></select>
+        </div>
+        <div class="field">
+          <label for="fileFormat">Type de fichier</label>
+          <select id="fileFormat"></select>
         </div>
         <div class="hoop-status" id="hoopStatus"></div>
         <button class="btn small ghost full" id="btnFitHoop" hidden>Ajuster au cadre</button>
@@ -189,6 +208,32 @@
       </div>
       <p class="hint small" id="exportSummary"></p>
     </form>
+  </dialog>
+
+  <!-- Recadrage -->
+  <dialog id="cropDialog" class="dialog crop-dialog">
+    <div class="dialog-head">
+      <h2>Recadrer l'image</h2>
+      <button class="btn ghost small" id="cropCancel" aria-label="Annuler">✕</button>
+    </div>
+    <p class="hint">Faites glisser le cadre ou ses poignées. Gardez seulement la partie à broder.</p>
+    <div class="crop-stage" id="cropStage"><canvas id="cropCanvas"></canvas></div>
+    <div class="crop-tools">
+      <select id="cropRatio" aria-label="Format du recadrage">
+        <option value="free">Format libre</option>
+        <option value="hoop">Format du cadre</option>
+        <option value="1:1">Carré</option>
+        <option value="4:3">4:3</option>
+        <option value="3:4">3:4</option>
+      </select>
+      <button type="button" class="btn small ghost" id="cropRotate">↻ Pivoter</button>
+      <button type="button" class="btn small ghost" id="cropReset">Tout sélectionner</button>
+      <span class="hint small" id="cropSize"></span>
+    </div>
+    <div class="crop-actions">
+      <button type="button" class="btn ghost" id="cropFull">Garder toute l'image</button>
+      <button type="button" class="btn primary" id="cropOk">Valider le recadrage</button>
+    </div>
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>

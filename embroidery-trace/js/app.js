@@ -9,6 +9,7 @@ import { loopsToPath } from "./core/trace.js";
 import { FORMATS, writeFormat } from "./formats/writers.js";
 import { makeZip } from "./core/zip.js";
 import { MACHINES, DEFAULT_MACHINE, machineFileName } from "./machines.js";
+import { openCropper } from "./crop.js";
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -33,6 +34,11 @@ const state = {
   patternScale: 1,
   widthMm: 100,
   machine: DEFAULT_MACHINE,
+  format: MACHINES[DEFAULT_MACHINE].format,
+  style: "fill", // fill | outline | outline1
+  outlineColor: "#1D1A16",
+  outlineTriple: false,
+  original: null, // image importée, avant recadrage
   hoop: MACHINES[DEFAULT_MACHINE].hoops[0],
   view: "stitch",
   tool: "pan",
@@ -186,11 +192,25 @@ async function loadFile(file) {
   }
   try {
     const img = await readFileAsImage(file);
-    loadImage(img, file.name.replace(/\.[^.]+$/, ""));
+    const cropped = await cropImage(img);
+    if (!cropped) return;
+    state.original = img;
+    loadImage(cropped, file.name.replace(/\.[^.]+$/, ""));
   } catch (e) {
     toast(e.message, "bad");
   }
 }
+
+function cropImage(img) {
+  const hoop = hoopSize();
+  return openCropper(img, { hoopRatio: hoop ? hoop[0] / hoop[1] : null });
+}
+
+$("#btnCrop").addEventListener("click", async () => {
+  if (!state.original) return;
+  const cropped = await cropImage(state.original);
+  if (cropped) loadImage(cropped, state.fileName);
+});
 
 function loadImage(img, name) {
   let iw = img.naturalWidth || img.width || 800;
@@ -218,6 +238,7 @@ function loadImage(img, name) {
   updateHistoryButtons();
   document.body.classList.add("has-image");
   $("#emptyState").hidden = true;
+  $("#btnCrop").disabled = !state.original;
   runAnalyze({ fitSize: true });
   fitView();
 }
@@ -226,7 +247,10 @@ const safeDesignName = (s) => s.normalize("NFD").replace(/[^\w-]/g, "").slice(0,
 
 async function loadSample() {
   const img = new Image();
-  img.onload = () => loadImage(img, "exemple");
+  img.onload = () => {
+    state.original = img;
+    loadImage(img, "exemple");
+  };
   img.src = "assets/exemple.svg";
 }
 
@@ -277,7 +301,11 @@ function vectorizeNow() {
 function stitchNow() {
   const { mmPerPx } = geometry();
   state.patternScale = mmPerPx;
-  state.pattern = stitchDesign(state.layers, state.vectors, mmPerPx);
+  state.pattern = stitchDesign(state.layers, state.vectors, mmPerPx, {
+    style: state.style,
+    outlineColor: state.outlineColor,
+    outlineTriple: state.outlineTriple,
+  });
   state.progress = state.pattern.stitches.length;
   stitchCache = null;
 }
@@ -1105,7 +1133,12 @@ function fillMachineUI() {
   if (!m.hoops.includes(state.hoop) && state.hoop !== "none") state.hoop = m.hoops[0];
   $("#hoop").innerHTML = m.hoops.map((h) => `<option value="${h}">${HOOP_LABEL(h)}</option>`).join("") + `<option value="none">Aucun</option>`;
   $("#hoop").value = state.hoop;
-  const ext = m.format.toUpperCase();
+  $("#fileFormat").innerHTML = Object.entries(FORMATS)
+    .map(([k, f]) => `<option value="${k}">.${f.label} — ${f.machine}${k === m.format ? " (recommandé)" : ""}</option>`)
+    .join("");
+  if (!FORMATS[state.format]) state.format = m.format;
+  $("#fileFormat").value = state.format;
+  const ext = state.format.toUpperCase();
   $("#btnQuick").textContent = `⬇ Fichier .${ext}`;
   $("#btnQuick").title = `Télécharger pour ${m.label}`;
   $("#btnMachineDownload").textContent = `⬇ Télécharger pour ${m.label} (.${ext})`;
@@ -1121,9 +1154,38 @@ $("#machine").addEventListener("change", (e) => {
     localStorage.setItem("filtrace.machine", state.machine);
   } catch {}
   state.hoop = MACHINES[state.machine].hoops[0];
+  state.format = MACHINES[state.machine].format;
   fillMachineUI();
   refreshUI();
   fitView();
+});
+
+$("#fileFormat").addEventListener("change", (e) => {
+  state.format = e.target.value;
+  fillMachineUI();
+  const rec = MACHINES[state.machine].format;
+  if (state.format !== rec) toast(`Attention : votre machine lit le format .${rec.toUpperCase()}.`, "bad");
+});
+
+function syncStyleUI() {
+  $("#style").value = state.style;
+  $("#outlineOpts").hidden = state.style === "fill";
+  $("#outlineColorWrap").hidden = state.style !== "outline1";
+  $("#outlineColor").value = state.outlineColor.toLowerCase();
+  $("#outlineTriple").checked = state.outlineTriple;
+}
+$("#style").addEventListener("change", (e) => {
+  state.style = e.target.value;
+  syncStyleUI();
+  scheduleStitch(0);
+});
+$("#outlineColor").addEventListener("change", (e) => {
+  state.outlineColor = e.target.value.toUpperCase();
+  scheduleStitch(0);
+});
+$("#outlineTriple").addEventListener("change", (e) => {
+  state.outlineTriple = e.target.checked;
+  scheduleStitch(0);
 });
 
 $("#hoop").addEventListener("change", (e) => {
@@ -1360,7 +1422,7 @@ function downloadForMachine() {
     toast("Le motif est plus grand que le cadre : cliquez sur « Ajuster au cadre » avant de télécharger.", "bad");
     return;
   }
-  download(writeFormat(m.format, state.pattern, name, { trims: m.trims !== false }), machineFileName(state.machine, name));
+  download(writeFormat(state.format, state.pattern, name, { trims: m.trims !== false }), machineFileName(state.machine, name, state.format));
 }
 $("#btnQuick").addEventListener("click", downloadForMachine);
 $("#btnMachineDownload").addEventListener("click", downloadForMachine);
@@ -1403,6 +1465,10 @@ $("#btnSaveProject").addEventListener("click", () => {
     widthMm: state.widthMm,
     hoop: state.hoop,
     machine: state.machine,
+    format: state.format,
+    style: state.style,
+    outlineColor: state.outlineColor,
+    outlineTriple: state.outlineTriple,
     fabric: state.fabric,
   };
   download(JSON.stringify(project), `${designName()}.filtrace.json`, "application/json");
@@ -1438,6 +1504,11 @@ $("#projectInput").addEventListener("change", async (e) => {
       widthMm: project.widthMm,
       hoop: project.hoop,
       machine: MACHINES[project.machine] ? project.machine : state.machine,
+      format: FORMATS[project.format] ? project.format : state.format,
+      style: project.style || "fill",
+      outlineColor: project.outlineColor || state.outlineColor,
+      outlineTriple: !!project.outlineTriple,
+      original: img,
       fabric: project.fabric || state.fabric,
       selected: project.layers[0]?.id ?? null,
       undo: [],
@@ -1449,6 +1520,7 @@ $("#projectInput").addEventListener("change", async (e) => {
     document.body.classList.add("has-image");
     $("#emptyState").hidden = true;
     updateHistoryButtons();
+    $("#btnCrop").disabled = false;
     refreshAll();
     fitView();
   } catch (err) {
@@ -1464,6 +1536,7 @@ function syncSettingsUI() {
   }
   $("#removeBg").checked = state.settings.removeBackground;
   fillMachineUI();
+  syncStyleUI();
   $("#fabric").value = state.fabric;
 }
 
@@ -1477,6 +1550,7 @@ try {
   if (MACHINES[saved]) {
     state.machine = saved;
     state.hoop = MACHINES[saved].hoops[0];
+    state.format = MACHINES[saved].format;
   }
 } catch {}
 syncSettingsUI();
