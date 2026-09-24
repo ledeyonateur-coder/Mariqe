@@ -67,7 +67,42 @@ function shade(hex, f) {
   return rgbToHex([r + (t - r) * p, g + (t - g) * p, b + (t - b) * p]);
 }
 
-function download(data, name, type = "application/octet-stream") {
+// Hébergé sur une page Claude, le téléchargement passe par la capacité
+// "downloads", qui n'accepte que certaines extensions : les fichiers machine
+// (.EXP, .PES…) sont alors livrés dans un .zip.
+const SAVE_ALLOWED = /\.(gif|png|jpe?g|webp|txt|json|md|html|svg|pdf|csv|zip)$/i;
+const hostedDownloads = window.claude?.use ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+hostedDownloads.then((d) => {
+  if (d) document.body.classList.add("hosted");
+});
+
+function toast(msg, kind = "") {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = "toast " + kind;
+  t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => (t.hidden = true), 6000);
+}
+
+async function download(data, name, type = "application/octet-stream") {
+  const hosted = await hostedDownloads;
+  if (hosted) {
+    let filename = name;
+    let payload = data instanceof Blob ? data : new Blob([data], { type });
+    if (!SAVE_ALLOWED.test(name)) {
+      const bytes = new Uint8Array(await payload.arrayBuffer());
+      payload = new Blob([makeZip([{ name, data: bytes }])]);
+      filename = name.replace(/\.[^.]+$/, "") + ".zip";
+    }
+    try {
+      await hosted.save({ filename, data: payload });
+      toast(filename === name ? `${name} enregistré.` : `${filename} enregistré : décompressez-le pour obtenir ${name}.`, "ok");
+    } catch (e) {
+      if (e?.code !== "declined") toast("Téléchargement impossible ici (" + (e?.code || "erreur") + ").", "bad");
+    }
+    return;
+  }
   const blob = data instanceof Blob ? data : new Blob([data], { type });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -146,14 +181,14 @@ function readFileAsImage(file) {
 async function loadFile(file) {
   if (!file) return;
   if (!/^image\//.test(file.type) && !/\.(png|jpe?g|svg|webp|gif|bmp)$/i.test(file.name)) {
-    alert("Format non pris en charge. Utilisez PNG, JPG, SVG ou WEBP.");
+    toast("Format non pris en charge. Utilisez PNG, JPG, SVG ou WEBP.", "bad");
     return;
   }
   try {
     const img = await readFileAsImage(file);
     loadImage(img, file.name.replace(/\.[^.]+$/, ""));
   } catch (e) {
-    alert(e.message);
+    toast(e.message, "bad");
   }
 }
 
@@ -204,7 +239,7 @@ function withBusy(fn) {
       fn();
     } catch (e) {
       console.error(e);
-      alert("Erreur de calcul : " + e.message);
+      toast("Erreur de calcul : " + e.message, "bad");
     } finally {
       busy(false);
     }
@@ -1074,6 +1109,9 @@ function fillMachineUI() {
   $("#btnQuick").textContent = `⬇ Fichier .${ext}`;
   $("#btnQuick").title = `Télécharger pour ${m.label}`;
   $("#btnMachineDownload").textContent = `⬇ Télécharger pour ${m.label} (.${ext})`;
+  hostedDownloads.then((d) => {
+    if (d) $("#btnMachineDownload").textContent = `⬇ Télécharger pour ${m.label} (.${ext} dans un .zip)`;
+  });
   $("#machineHelp").textContent = m.usb;
 }
 
@@ -1287,7 +1325,7 @@ async function exportExtra(kind) {
   else if (kind === "sheet") {
     const html = sheetHTML(renderPNG(6).toDataURL("image/png"));
     const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-    const win = window.open(url, "_blank");
+    const win = (await hostedDownloads) ? null : window.open(url, "_blank");
     if (!win) download(html, `${name}-fiche.html`, "text/html");
   } else if (kind === "zip") {
     const files = Object.keys(FORMATS).map((ext) => ({ name: `${name}.${ext}`, data: writeFormat(ext, state.pattern, name) }));
@@ -1318,7 +1356,10 @@ function downloadForMachine() {
   if (!state.pattern) return;
   const m = MACHINES[state.machine];
   const name = designName();
-  if (!fitsHoop() && !confirm("Le motif est plus grand que le cadre choisi : la machine risque de le refuser. Télécharger quand même ?")) return;
+  if (!fitsHoop()) {
+    toast("Le motif est plus grand que le cadre : cliquez sur « Ajuster au cadre » avant de télécharger.", "bad");
+    return;
+  }
   download(writeFormat(m.format, state.pattern, name, { trims: m.trims !== false }), machineFileName(state.machine, name));
 }
 $("#btnQuick").addEventListener("click", downloadForMachine);
@@ -1411,7 +1452,7 @@ $("#projectInput").addEventListener("change", async (e) => {
     refreshAll();
     fitView();
   } catch (err) {
-    alert(err.message);
+    toast(err.message, "bad");
   }
   e.target.value = "";
 });
@@ -1440,7 +1481,9 @@ try {
 } catch {}
 syncSettingsUI();
 setView("stitch");
-if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
-}
-if (new URLSearchParams(location.search).has("exemple")) loadSample();
+try {
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+} catch {}
+if (new URLSearchParams(location.search).has("exemple") || window.FILTRACE_AUTOSAMPLE) loadSample();
