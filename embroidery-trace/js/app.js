@@ -861,6 +861,7 @@ const PEC_OPTIONS = PEC_THREADS.map((t, i) => (t ? `<option value="#${t[0]}" sty
   .join("");
 
 function renderLayers() {
+  syncStitchPick();
   const list = $("#layers");
   const counts = layerCounts();
   list.innerHTML = "";
@@ -1175,9 +1176,37 @@ $("#fileFormat").addEventListener("change", (e) => {
   if (state.format !== rec) toast(`Attention : votre machine lit le format .${rec.toUpperCase()}.`, "bad");
 });
 
+/** Type de point commun à tous les calques brodés (null si mélangé). */
+function commonStitchType() {
+  const types = new Set(state.layers.filter((L) => L.type !== "none").map((L) => L.type));
+  return types.size === 1 ? [...types][0] : null;
+}
+
+function syncStitchPick() {
+  const t = commonStitchType();
+  for (const b of $$("#stitchPick [data-type]")) b.setAttribute("aria-checked", String(b.dataset.type === t));
+  $("#stitchPickHint").textContent = t
+    ? "Réglable ensuite couleur par couleur dans « Calques de fil »."
+    : "Types différents selon les couleurs (voir « Calques de fil »). Choisissez-en un pour tout le motif.";
+}
+
+$("#stitchPick").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-type]");
+  if (!b || !state.labels) return;
+  pushHistory();
+  for (const L of state.layers) {
+    if (L.type === "none") continue;
+    L.type = b.dataset.type;
+    if (L.type === "satin") L.angle = null;
+    else if (L.angle === null) L.angle = DEFAULT_LAYER.angle;
+  }
+  changedLayers();
+});
+
 function syncStyleUI() {
   const outline = state.style !== "fill";
   $("#spacingField").hidden = outline;
+  $("#stitchPickField").hidden = outline;
   const len = outline ? state.outlineLength : state.stitchLength;
   $("#stitchLen").value = len;
   $("#stitchLenOut").textContent = len;

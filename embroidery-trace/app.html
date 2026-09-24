@@ -61,6 +61,28 @@
             <option value="outline1">Contours (un seul fil)</option>
           </select>
         </div>
+        <div class="field" id="stitchPickField">
+          <label>Type de point (tout le motif)</label>
+          <div class="stitch-pick" id="stitchPick" role="radiogroup" aria-label="Type de point">
+            <button type="button" role="radio" data-type="auto" title="Satin pour les formes fines, remplissage pour les surfaces">
+              <svg viewBox="0 0 60 36" aria-hidden="true"><path d="M4 8 H30 M30 13 H4 M4 18 H30 M30 23 H4 M4 28 H30" stroke="#d8432e" stroke-width="2.2" stroke-dasharray="9 1.5"/><path d="M36 8 L40 28 L44 8 L48 28 L52 8 L56 28" fill="none" stroke="#1f3a5f" stroke-width="2.2" stroke-linejoin="round"/></svg>
+              <b>Auto</b><span>Satin + remplissage</span>
+            </button>
+            <button type="button" role="radio" data-type="fill" title="Rangs parallèles, pour les grandes surfaces">
+              <svg viewBox="0 0 60 36" aria-hidden="true"><path d="M6 8 H54 M54 13 H6 M6 18 H54 M54 23 H6 M6 28 H54" stroke="#d8432e" stroke-width="2.2" stroke-dasharray="11 1.5"/></svg>
+              <b>Remplissage</b><span>Tatami, surfaces</span>
+            </button>
+            <button type="button" role="radio" data-type="satin" title="Zigzag brillant d'un bord à l'autre, pour lettres et bordures">
+              <svg viewBox="0 0 60 36" aria-hidden="true"><path d="M6 8 L10 28 L14 8 L18 28 L22 8 L26 28 L30 8 L34 28 L38 8 L42 28 L46 8 L50 28 L54 8" fill="none" stroke="#1f3a5f" stroke-width="2.2" stroke-linejoin="round"/></svg>
+              <b>Satin</b><span>Lettres, bordures</span>
+            </button>
+            <button type="button" role="radio" data-type="running" title="Une ligne de points le long des contours">
+              <svg viewBox="0 0 60 36" aria-hidden="true"><path d="M6 28 C18 4 42 4 54 28" fill="none" stroke="#2e933c" stroke-width="2.6" stroke-dasharray="6 2.5" stroke-linecap="round"/></svg>
+              <b>Point droit</b><span>Lignes, détails</span>
+            </button>
+          </div>
+          <span class="hint small" id="stitchPickHint">Réglable ensuite couleur par couleur dans « Calques de fil ».</span>
+        </div>
         <div class="field" id="spacingField">
           <label for="spacing">Espacement entre les fils (mm) <output id="spacingOut">0.4</output></label>
           <input type="range" id="spacing" min="0.25" max="1.5" step="0.05" value="0.4" />

@@ -312,3 +312,25 @@ body:not([data-view="stitch"]) .stage-foot { opacity: 0.55; }
   .zoom { margin-left: 0; }
 }
 .field[hidden] { display: none; }
+
+.stitch-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.stitch-pick button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.stitch-pick button:hover { border-color: var(--ink); }
+.stitch-pick button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.stitch-pick button[data-mixed="true"] { border-style: dashed; }
+.stitch-pick svg { width: 100%; height: 26px; margin-bottom: 4px; }
+.stitch-pick b { font-size: 12.5px; }
+.stitch-pick span { font-size: 11px; color: var(--muted); }
