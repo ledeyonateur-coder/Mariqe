@@ -1,0 +1,11 @@
+{
+  "name": "filtrace",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Image -> fichiers de broderie (DST, PES, JEF, EXP, VP3), 100 % dans le navigateur",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node test/run.mjs && python3 test/check.py"
+  }
+}

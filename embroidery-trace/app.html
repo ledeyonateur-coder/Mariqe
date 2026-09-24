@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Éditeur — FilTrace</title>
+  <meta name="description" content="Transformez une image en fichier de broderie DST, PES, JEF, EXP ou VP3 directement dans votre navigateur." />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body class="app">
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="Accueil FilTrace">
+      <img src="assets/favicon.svg" alt="" width="28" height="28" />
+      <span>FilTrace</span>
+    </a>
+    <div class="topbar-file" id="fileName">Aucune image</div>
+    <div class="topbar-actions">
+      <button class="btn ghost" id="btnUndo" title="Annuler (Ctrl+Z)" disabled>↶</button>
+      <button class="btn ghost" id="btnRedo" title="Rétablir (Ctrl+Maj+Z)" disabled>↷</button>
+      <label class="btn ghost" title="Ouvrir un projet FilTrace">
+        Ouvrir<input type="file" id="projectInput" accept=".json,.filtrace" hidden />
+      </label>
+      <button class="btn ghost" id="btnSaveProject" disabled>Enregistrer</button>
+      <button class="btn primary" id="btnExport" disabled>Exporter</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- Panneau gauche : image, couleurs, taille -->
+    <aside class="panel left" id="leftPanel">
+      <section class="card">
+        <h2><span class="step">1</span> Image</h2>
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/bmp" hidden />
+          <strong>Glissez une image ici</strong>
+          <span>ou cliquez — PNG, JPG, SVG, WEBP<br />(vous pouvez aussi coller avec Ctrl+V)</span>
+        </label>
+        <button class="btn small ghost full" id="btnSample">Essayer avec un exemple</button>
+      </section>
+
+      <section class="card" data-needs-image>
+        <h2><span class="step">2</span> Couleurs</h2>
+        <div class="field">
+          <label for="colors">Nombre de couleurs <output id="colorsOut">6</output></label>
+          <input type="range" id="colors" min="2" max="16" value="6" />
+        </div>
+        <label class="check"><input type="checkbox" id="removeBg" checked /> Retirer le fond</label>
+        <div class="field">
+          <label for="cleanup">Nettoyage des petits détails <output id="cleanupOut">30</output></label>
+          <input type="range" id="cleanup" min="0" max="400" step="5" value="30" />
+        </div>
+        <div class="field">
+          <label for="smoothing">Lissage des bords <output id="smoothingOut">1</output></label>
+          <input type="range" id="smoothing" min="0" max="4" value="1" />
+        </div>
+        <details>
+          <summary>Vectorisation avancée</summary>
+          <div class="field">
+            <label for="curve">Arrondi des courbes <output id="curveOut">1</output></label>
+            <input type="range" id="curve" min="0" max="3" value="1" />
+          </div>
+          <div class="field">
+            <label for="detail">Simplification <output id="detailOut">0.7</output></label>
+            <input type="range" id="detail" min="0.2" max="3" step="0.1" value="0.7" />
+          </div>
+        </details>
+      </section>
+
+      <section class="card" data-needs-image>
+        <h2><span class="step">3</span> Taille &amp; cadre</h2>
+        <div class="row2">
+          <div class="field">
+            <label for="widthMm">Largeur (mm)</label>
+            <input type="number" id="widthMm" min="5" max="1000" step="1" value="100" />
+          </div>
+          <div class="field">
+            <label for="heightMm">Hauteur (mm)</label>
+            <input type="number" id="heightMm" min="5" max="1000" step="1" value="100" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="hoop">Cadre de la machine</label>
+          <select id="hoop">
+            <option value="100x100">100 × 100 mm (4″ × 4″)</option>
+            <option value="130x180" selected>130 × 180 mm (5″ × 7″)</option>
+            <option value="160x260">160 × 260 mm (6″ × 10″)</option>
+            <option value="200x200">200 × 200 mm (8″ × 8″)</option>
+            <option value="200x300">200 × 300 mm (8″ × 12″)</option>
+            <option value="240x360">240 × 360 mm (9,5″ × 14″)</option>
+            <option value="none">Aucun</option>
+          </select>
+        </div>
+        <div class="hoop-status" id="hoopStatus"></div>
+        <button class="btn small ghost full" id="btnFitHoop" hidden>Ajuster au cadre</button>
+      </section>
+    </aside>
+
+    <!-- Zone centrale : aperçu -->
+    <section class="stage">
+      <div class="stage-bar">
+        <div class="tabs" role="tablist" id="viewTabs">
+          <button role="tab" data-view="original">Image</button>
+          <button role="tab" data-view="raster">Couleurs</button>
+          <button role="tab" data-view="vector">Vecteurs</button>
+          <button role="tab" data-view="stitch" class="active">Points</button>
+        </div>
+        <div class="tools" id="tools">
+          <button data-tool="pan" class="active" title="Déplacer (H)">✋</button>
+          <button data-tool="brush" title="Pinceau : peindre avec le calque sélectionné (B)">🖌</button>
+          <button data-tool="eraser" title="Gomme : retirer de la broderie (E)">⌫</button>
+          <button data-tool="bucket" title="Pot : recolorer une zone entière (G)">🪣</button>
+          <button data-tool="picker" title="Pipette : sélectionner le calque sous le curseur (I)">⌖</button>
+          <label class="brush-size" title="Taille du pinceau">
+            <input type="range" id="brushSize" min="1" max="60" value="10" />
+          </label>
+        </div>
+        <div class="zoom">
+          <button id="zoomOut" title="Dézoomer">−</button>
+          <button id="zoomFit" title="Ajuster">⤢</button>
+          <button id="zoomIn" title="Zoomer">+</button>
+        </div>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="view"></canvas>
+        <div class="empty" id="emptyState">
+          <div>
+            <p class="empty-title">Importez une image pour commencer</p>
+            <p>Logos, dessins, textes : les images aux couleurs franches et aux contours nets donnent les meilleurs résultats.</p>
+          </div>
+        </div>
+        <div class="busy" id="busy" hidden><span class="spinner"></span> Calcul…</div>
+      </div>
+      <div class="stage-foot" id="stitchBar">
+        <button class="btn small" id="btnPlay" title="Simuler la broderie">▶ Simuler</button>
+        <input type="range" id="progress" min="0" max="0" value="0" aria-label="Avancement de la simulation" />
+        <select id="speed" aria-label="Vitesse">
+          <option value="4">Lent</option>
+          <option value="25" selected>Normal</option>
+          <option value="120">Rapide</option>
+        </select>
+        <label class="check small"><input type="checkbox" id="showJumps" /> Sauts</label>
+        <label class="fabric" title="Couleur du tissu">Tissu <input type="color" id="fabric" value="#f4efe6" /></label>
+      </div>
+    </section>
+
+    <!-- Panneau droit : calques -->
+    <aside class="panel right" data-needs-image>
+      <section class="card">
+        <div class="card-head">
+          <h2><span class="step">4</span> Calques de fil</h2>
+          <button class="btn small ghost" id="btnAddLayer" title="Ajouter un calque à peindre">+ Calque</button>
+        </div>
+        <p class="hint">Ordre de broderie de haut en bas. Choisissez le type de point de chaque couleur.</p>
+        <ol class="layers" id="layers"></ol>
+      </section>
+      <section class="card stats" id="stats"></section>
+    </aside>
+  </main>
+
+  <!-- Export -->
+  <dialog id="exportDialog" class="dialog">
+    <form method="dialog">
+      <div class="dialog-head">
+        <h2>Exporter le motif</h2>
+        <button class="btn ghost small" value="close" aria-label="Fermer">✕</button>
+      </div>
+      <div class="field">
+        <label for="designName">Nom du motif</label>
+        <input type="text" id="designName" maxlength="16" value="motif" />
+      </div>
+      <p class="hint">Fichiers machine</p>
+      <div class="formats" id="formatButtons"></div>
+      <p class="hint">Autres fichiers</p>
+      <div class="formats">
+        <button type="button" class="format" data-extra="svg"><b>SVG</b><span>Calques vectoriels (Inkscape / Ink/Stitch)</span></button>
+        <button type="button" class="format" data-extra="png"><b>PNG</b><span>Aperçu réaliste des points</span></button>
+        <button type="button" class="format" data-extra="sheet"><b>Fiche</b><span>Ordre des fils à imprimer</span></button>
+        <button type="button" class="format" data-extra="zip"><b>ZIP</b><span>Tous les formats d'un coup</span></button>
+      </div>
+      <p class="hint small" id="exportSummary"></p>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
