@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Galerie de la communauté — FilTrace</title>
+  <meta name="description" content="Motifs de broderie gratuits partagés par la communauté FilTrace : ouvrez-les et exportez-les pour votre machine (EXP, PES, JEF, DST, VP3)." />
+  <link rel="canonical" href="https://filtracebroderie.vercel.app/communaute.html" />
+  <meta property="og:title" content="Galerie de la communauté — FilTrace" />
+  <meta property="og:description" content="Motifs de broderie gratuits, prêts pour votre machine." />
+  <meta property="og:image" content="https://filtracebroderie.vercel.app/assets/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#1d1a16" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="index.html"><img src="assets/favicon.svg" alt="" width="30" height="30" /> FilTrace</a>
+      <nav>
+        <a href="aide/index.html">Aide</a>
+        <a href="communaute.html">Communauté</a>
+      </nav>
+      <a class="btn primary small" href="app.html">Ouvrir l'éditeur</a>
+    </div>
+  </header>
+  <main class="section">
+    <div class="inner">
+      <p class="eyebrow">Gratuit, partagé par la communauté</p>
+      <h1 class="page-title">Galerie de motifs</h1>
+      <p class="sub">Ouvrez un motif dans l'éditeur, changez sa taille ou ses couleurs, puis exportez-le pour votre machine. Pour partager le vôtre : dans l'éditeur, « Exporter… » puis « Partager dans la galerie ».</p>
+      <div class="community-tools">
+        <input type="search" id="search" placeholder="Rechercher un motif…" aria-label="Rechercher" />
+        <select id="sort" aria-label="Trier">
+          <option value="new">Les plus récents</option>
+          <option value="popular">Les plus téléchargés</option>
+        </select>
+      </div>
+      <p class="hint" id="status" aria-live="polite">Chargement…</p>
+      <div class="community-grid" id="grid"></div>
+
+      <section class="my-shares" id="myShares" hidden>
+        <h2>Mes partages</h2>
+        <p class="sub">Motifs partagés depuis cet appareil. Vous pouvez les retirer de la galerie.</p>
+        <ul id="myList"></ul>
+      </section>
+      <p class="hint small">Un motif inapproprié ? Utilisez « Signaler » : il est masqué après plusieurs signalements.</p>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="inner">
+      <span>© FilTrace — outil gratuit de numérisation de broderie</span>
+      <span><a href="aide/index.html">Aide</a> · <a href="mentions-legales.html">Mentions légales</a> · <a href="confidentialite.html">Confidentialité</a></span>
+    </div>
+  </footer>
+  <script type="module" src="js/community.js"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://filtracebroderie.vercel.app/sitemap.xml

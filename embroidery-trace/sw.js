@@ -1,5 +1,5 @@
 // Service worker : l'application fonctionne hors connexion une fois installée.
-const CACHE = "filtrace-v9";
+const CACHE = "filtrace-v10";
 const FILES = [
   "./",
   "index.html",
@@ -19,6 +19,7 @@ const FILES = [
   "js/engine.js",
   "js/worker.js",
   "js/core/checks.js",
+  "js/cloud.js",
   "assets/modeles/coeur.svg",
   "js/core/pipeline.js",
   "js/core/quantize.js",
@@ -49,6 +50,8 @@ self.addEventListener("activate", (e) => {
 // Réseau d'abord (pour recevoir les mises à jour), cache si hors ligne.
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // Les données en ligne (synchronisation, galerie) ne passent jamais par le cache.
+  if (new URL(e.request.url).pathname.startsWith("/api/")) return;
   e.respondWith(
     fetch(e.request)
       .then((res) => {

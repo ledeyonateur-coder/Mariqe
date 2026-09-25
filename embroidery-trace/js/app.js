@@ -15,6 +15,8 @@ import { readEmbroidery } from "./formats/readers.js";
 import { FABRICS } from "./fabrics.js";
 import { adjustPixels, sketchPixels } from "./photo.js";
 import { checkPattern } from "./core/checks.js";
+import { newSyncCode, normalizeCode, pushProject, pullProjects, galleryGet, galleryShare, b64, unb64 } from "./cloud.js";
+import { readDST } from "./formats/readers.js";
 import { FONTS, drawText, measureText } from "./text.js";
 import { saveProject, listProjects, getProject, deleteProject } from "./projects.js";
 
@@ -64,6 +66,7 @@ const state = {
   focus: null, // point mis en évidence par une alerte
   compareX: 0.5, // position du séparateur avant / après (0..1)
   owned: [], // Mes bobines : couleurs de fil possédées
+  syncCode: null, // code de synchronisation (reste sur l'appareil)
   useOwned: false, // motif texte seul : l'intérieur des lettres reste vide
   hoop: MACHINES[DEFAULT_MACHINE].hoops[0],
   view: "stitch",
@@ -2128,6 +2131,137 @@ $("#threadChart").addEventListener("change", (e) => {
   if (state.pattern) state.pattern.threads.forEach((t, i) => (t.name = state.layers.find((L) => L.color === t.color)?.name || t.name));
 });
 
+// ------------------------------------------------------------------ synchronisation
+
+function syncUI(msg = "") {
+  const has = !!state.syncCode;
+  $("#syncNoCode").hidden = has;
+  $("#syncHasCode").hidden = !has;
+  if (has) $("#syncCode").textContent = state.syncCode;
+  $("#syncStatus").textContent = msg;
+}
+function setSyncCode(code) {
+  state.syncCode = code;
+  try {
+    code ? localStorage.setItem("filtrace.sync", code) : localStorage.removeItem("filtrace.sync");
+  } catch {}
+  syncUI();
+}
+/** Version allégée du projet pour l'envoi (image en JPEG). */
+function projectForSync(p) {
+  const { thumb, ...rest } = p;
+  return rest;
+}
+async function pushOne(id) {
+  const p = await getProject(id);
+  if (p) await pushProject(state.syncCode, id, projectForSync(p));
+}
+$("#syncCreate").addEventListener("click", () => {
+  setSyncCode(newSyncCode());
+  syncUI("Code créé. Notez-le : il vous servira sur vos autres appareils.");
+});
+$("#syncUse").addEventListener("click", () => {
+  const c = normalizeCode($("#syncCodeInput").value);
+  if (c.length < 12) return syncUI("Code trop court.");
+  setSyncCode(c.match(/.{1,4}/g).join("-"));
+  syncUI("Code enregistré. Touchez « Récupérer mes projets ».");
+});
+$("#syncCopy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(state.syncCode);
+    syncUI("Code copié.");
+  } catch {
+    syncUI("Sélectionnez le code pour le copier.");
+  }
+});
+$("#syncForget").addEventListener("click", () => {
+  setSyncCode(null);
+  syncUI("Code oublié sur cet appareil (vos projets en ligne restent disponibles avec ce code).");
+});
+$("#syncPush").addEventListener("click", async () => {
+  try {
+    const items = await listProjects();
+    syncUI(`Envoi de ${items.length} projet(s)…`);
+    let n = 0;
+    for (const it of items) {
+      await pushOne(it.id);
+      syncUI(`Envoi… ${++n} / ${items.length}`);
+    }
+    syncUI(`✓ ${n} projet(s) envoyé(s).`);
+  } catch (e) {
+    syncUI("⚠ " + e.message);
+  }
+});
+$("#syncPull").addEventListener("click", async () => {
+  try {
+    syncUI("Récupération…");
+    const items = await pullProjects(state.syncCode);
+    for (const { pid, project } of items) await saveProject({ ...project, id: pid, updatedAt: project.updatedAt || Date.now() });
+    syncUI(`✓ ${items.length} projet(s) récupéré(s).`);
+    renderProjects();
+  } catch (e) {
+    syncUI("⚠ " + e.message);
+  }
+});
+
+// ------------------------------------------------------------------ partage dans la galerie
+
+async function shareThumb() {
+  const big = renderPNG(4);
+  const c = document.createElement("canvas");
+  const k = Math.min(1, 420 / Math.max(big.width, big.height));
+  c.width = Math.round(big.width * k);
+  c.height = Math.round(big.height * k);
+  c.getContext("2d").drawImage(big, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.82);
+}
+$("#shareBtn").addEventListener("click", async () => {
+  const out = $("#shareResult");
+  if (!state.pattern?.stats.stitchCount) return;
+  if (!$("#shareRights").checked) return (out.textContent = "Cochez la case pour confirmer que vous pouvez partager ce motif.");
+  const name = $("#shareName").value.trim() || designName();
+  try {
+    $("#shareBtn").disabled = true;
+    out.textContent = "Envoi…";
+    const s = state.pattern.stats;
+    const r = await galleryShare({
+      name,
+      author: $("#shareAuthor").value.trim(),
+      thumb: await shareThumb(),
+      dst: b64(writeFormat("dst", state.pattern, name)),
+      threads: state.pattern.threads,
+      widthMm: Math.round(s.widthMm),
+      heightMm: Math.round(s.heightMm),
+      stitches: s.stitchCount,
+    });
+    out.innerHTML = `✓ Partagé ! <a href="communaute.html" target="_blank">Voir la galerie</a>. Code pour le supprimer plus tard : <code></code>`;
+    out.querySelector("code").textContent = r.token;
+    try {
+      const mine = JSON.parse(localStorage.getItem("filtrace.shared") || "[]");
+      mine.push({ id: r.id, token: r.token, name });
+      localStorage.setItem("filtrace.shared", JSON.stringify(mine));
+    } catch {}
+  } catch (e) {
+    out.textContent = "⚠ " + e.message;
+  } finally {
+    $("#shareBtn").disabled = false;
+  }
+});
+
+/** Ouvre un motif de la galerie (app.html?galerie=ID). */
+async function openFromGallery(id) {
+  try {
+    const g = await galleryGet(id);
+    const p = readDST(unb64(g.dst));
+    // Le DST n'a pas de couleurs : on remet celles du partage.
+    p.threads = g.threads.length ? g.threads : p.threads;
+    openFilePattern(p, g.name || "motif", g.widthMm || null);
+    toast(`« ${g.name} »${g.author ? " par " + g.author : ""} : exportez-le au format de votre machine.`, "ok");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+}
+
 // ------------------------------------------------------------------ mes bobines
 
 function renderOwned() {
@@ -2563,6 +2697,8 @@ $("#btnQuick").addEventListener("click", downloadForMachine);
 $("#btnMachineDownload").addEventListener("click", downloadForMachine);
 
 $("#btnExport").addEventListener("click", () => {
+  $("#shareName").value = state.fileName || designName();
+  $("#shareResult").textContent = "";
   const s = state.pattern.stats;
   $("#exportSummary").textContent = `${fmt(s.stitchCount)} points · ${s.colors} couleur(s) · ${fmt(s.widthMm, 1)} × ${fmt(s.heightMm, 1)} mm${
     fitsHoop() ? "" : " · ⚠ plus grand que le cadre choisi"
@@ -2705,6 +2841,7 @@ $("#btnSaveProject").addEventListener("click", async () => {
     });
     state.projectId = id;
     toast(`« ${state.fileName} » enregistré dans Mes projets.`, "ok");
+    if (state.syncCode) pushOne(id).catch((e) => toast("Synchronisation : " + e.message, "bad"));
   } catch (e) {
     toast("Enregistrement impossible sur cet appareil : " + e.message, "bad");
   }
@@ -2741,6 +2878,7 @@ async function renderProjects() {
 
 $("#btnProjects").addEventListener("click", () => {
   renderProjects();
+  syncUI();
   $("#projectsDialog").showModal();
 });
 $("#projectsClose").addEventListener("click", () => $("#projectsDialog").close());
@@ -2804,6 +2942,7 @@ new ResizeObserver(() => {
   resizeCanvas();
 }).observe($("#canvasWrap"));
 try {
+  state.syncCode = localStorage.getItem("filtrace.sync");
   const chart = localStorage.getItem("filtrace.chart");
   const owned = JSON.parse(localStorage.getItem("filtrace.owned") || "null");
   if (owned) (state.owned = owned.owned || []), (state.useOwned = !!owned.use);
@@ -2835,4 +2974,6 @@ try {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 } catch {}
-if (new URLSearchParams(location.search).has("exemple") || window.FILTRACE_AUTOSAMPLE) loadSample();
+const params = new URLSearchParams(location.search);
+if (params.get("galerie")) openFromGallery(params.get("galerie"));
+else if (params.has("exemple") || window.FILTRACE_AUTOSAMPLE) loadSample();

@@ -448,3 +448,12 @@ body:not(.simple) [data-simple-only] { display: none !important; }
 .text-edit { border-bottom: 1px dashed var(--line); padding-bottom: 10px; margin-bottom: 4px; }
 .text-edit .btn { margin-top: 8px; }
 #view[data-tool="move"] { cursor: move; }
+
+.sync-box, .share-box { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sync-box h3, .share-box h3 { margin: 0 0 4px; font-size: 15px; }
+.sync-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.sync-row input { flex: 1; min-width: 160px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+.sync-row code { font-size: 16px; font-weight: 700; letter-spacing: 0.05em; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 8px; padding: 6px 10px; }
+.share-box .btn { margin-top: 10px; }
+.share-box .check { margin-top: 4px; }
+#shareResult code { user-select: all; }

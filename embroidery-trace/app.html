@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Éditeur — FilTrace</title>
   <meta name="description" content="Transformez une image en fichier de broderie DST, PES, JEF, EXP ou VP3 directement dans votre navigateur." />
+  <meta property="og:title" content="FilTrace — Éditeur de broderie gratuit" />
+  <meta property="og:description" content="Image, texte ou modèle → fichier de broderie DST, PES, JEF, EXP, VP3." />
+  <meta property="og:image" content="https://filtracebroderie.vercel.app/assets/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <script defer src="/_vercel/insights/script.js"></script>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -301,6 +306,17 @@
         <button type="button" class="format" data-extra="zip"><b>ZIP</b><span>Tous les formats d'un coup</span></button>
       </div>
       <p class="hint small" id="exportSummary"></p>
+      <section class="share-box">
+        <h3>Partager avec la communauté</h3>
+        <p class="hint small">Publiez gratuitement ce motif dans la <a href="communaute.html" target="_blank">galerie</a> pour que d'autres puissent le broder.</p>
+        <div class="row2">
+          <div class="field"><label for="shareName">Nom du motif</label><input type="text" id="shareName" maxlength="40" /></div>
+          <div class="field"><label for="shareAuthor">Votre prénom ou pseudo (facultatif)</label><input type="text" id="shareAuthor" maxlength="30" /></div>
+        </div>
+        <label class="check small"><input type="checkbox" id="shareRights" /> J'ai créé ce motif ou j'ai le droit de le partager.</label>
+        <button type="button" class="btn small primary" id="shareBtn">Partager dans la galerie</button>
+        <p class="hint small" id="shareResult" aria-live="polite"></p>
+      </section>
     </form>
   </dialog>
 
@@ -380,6 +396,24 @@
     </div>
     <p class="hint">Enregistrés dans ce navigateur, sur cet appareil. Utilisez « Télécharger » pour les garder ailleurs.</p>
     <ul class="project-list" id="projectList"></ul>
+    <section class="sync-box">
+      <h3>Synchroniser entre appareils</h3>
+      <p class="hint small">Un code personnel pour retrouver vos projets sur votre téléphone et votre ordinateur. Les projets sont chiffrés avec ce code : personne d'autre ne peut les lire. Gardez-le précieusement.</p>
+      <div id="syncNoCode" class="sync-row">
+        <button type="button" class="btn small primary" id="syncCreate">Créer mon code</button>
+        <input type="text" id="syncCodeInput" placeholder="ou saisissez votre code" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <button type="button" class="btn small ghost" id="syncUse">Utiliser</button>
+      </div>
+      <div id="syncHasCode" hidden>
+        <div class="sync-row"><code id="syncCode"></code><button type="button" class="btn small ghost" id="syncCopy">Copier</button></div>
+        <div class="sync-row">
+          <button type="button" class="btn small primary" id="syncPush">Envoyer mes projets</button>
+          <button type="button" class="btn small ghost" id="syncPull">Récupérer mes projets</button>
+          <button type="button" class="btn small ghost danger" id="syncForget">Oublier le code ici</button>
+        </div>
+      </div>
+      <p class="hint small" id="syncStatus" aria-live="polite"></p>
+    </section>
     <div class="crop-actions">
       <label class="btn ghost">Importer un fichier projet<input type="file" id="projectInput" accept=".json,.filtrace" hidden /></label>
     </div>
