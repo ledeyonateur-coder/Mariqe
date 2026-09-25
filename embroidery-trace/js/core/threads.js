@@ -43,3 +43,25 @@ export function nearestThreadName(hex) {
   const i = nearestThreadIndex(hex, PEC_THREADS);
   return { brand: "Brother", index: i, name: PEC_THREADS[i][1], hex: "#" + PEC_THREADS[i][0] };
 }
+// Husqvarna Viking (HUS) — référence et nom.
+export const HUS_THREADS = [["000000","Black","026"],["0000E7","Blue","005"],["00C600","Green","002"],["FF0000","Red","014"],["840084","Purple","008"],["FFFF00","Yellow","020"],["848484","Grey","024"],["8484E7","Light Blue","006"],["00FF84","Light Green","003"],["FF7B31","Orange","017"],["FF8CA5","Pink","011"],["845200","Brown","028"],["FFFFFF","White","022"],["000084","Dark Blue","004"],["008400","Dark Green","001"],["7B0000","Dark Red","013"],["FF6384","Light Red","015"],["522952","Dark Purple","007"],["FF00FF","Light Purple","009"],["FFDE00","Dark Yellow","019"],["FFFF9C","Light Yellow","021"],["525252","Dark Grey","025"],["D6D6D6","Light Grey","023"],["FF5208","Dark Orange","016"],["FF9C5A","Light Orange","018"],["FF52B5","Dark Pink","010"],["FFC6DE","Light Pink","012"],["523100","Dark Brown","027"],["B5A584","Light Brown","029"]];
+
+/** Nuanciers proposés dans l'éditeur. Chaque entrée : [hex, nom, référence]. */
+export const THREAD_CHARTS = {
+  brother: { label: "Brother", threads: PEC_THREADS.slice(1).map((t, i) => [t[0], t[1], String(i + 1)]) },
+  janome: { label: "Janome", threads: JEF_THREADS.slice(1).map((t, i) => [t[0], t[1], String(i + 1)]) },
+  husqvarna: { label: "Husqvarna Viking", threads: HUS_THREADS },
+};
+
+/** Fil le plus proche dans un nuancier : {hex, name, ref}. */
+export function nearestInChart(hex, chartKey) {
+  const list = THREAD_CHARTS[chartKey].threads;
+  const c = hexToRgb(hex);
+  let best = list[0];
+  let bd = Infinity;
+  for (const t of list) {
+    const d = redmean(c, hexToRgb(t[0]));
+    if (d < bd) (bd = d), (best = t);
+  }
+  return { hex: "#" + best[0], name: best[1], ref: best[2] };
+}

@@ -6,6 +6,6 @@
   "description": "Image -> fichiers de broderie (DST, PES, JEF, EXP, VP3), 100 % dans le navigateur",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node test/run.mjs && python3 test/check.py"
+    "test": "node test/run.mjs && python3 test/check.py && node test/readers.mjs"
   }
 }

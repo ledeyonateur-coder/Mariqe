@@ -2,14 +2,20 @@
 // simulation de broderie et export des fichiers machine. Tout tourne
 // localement dans le navigateur : l'image n'est envoyée nulle part.
 
-import { analyzeImage, vectorizeAll, stitchDesign, contentBounds, DEFAULT_SETTINGS } from "./core/pipeline.js";
-import { STITCH, JUMP, COLOR_CHANGE, STITCH_TYPES, DEFAULT_LAYER, effectiveAngle } from "./core/stitch.js";
-import { PEC_THREADS, JEF_THREADS, nearestThreadIndex, nearestThreadName, hexToRgb, rgbToHex } from "./core/threads.js";
+import { analyzeImage, vectorizeAll, stitchDesign, contentBounds, DEFAULT_SETTINGS, APPLIQUE_LABELS } from "./core/pipeline.js";
+import { STITCH, JUMP, TRIM, COLOR_CHANGE, STITCH_TYPES, DEFAULT_LAYER, effectiveAngle, patternBounds, scalePattern, patternStats } from "./core/stitch.js";
+import { PEC_THREADS, JEF_THREADS, THREAD_CHARTS, nearestThreadIndex, nearestInChart, hexToRgb, rgbToHex } from "./core/threads.js";
 import { loopsToPath } from "./core/trace.js";
 import { FORMATS, writeFormat } from "./formats/writers.js";
 import { makeZip } from "./core/zip.js";
 import { MACHINES, DEFAULT_MACHINE, machineFileName } from "./machines.js";
 import { openCropper } from "./crop.js";
+import { readEmbroidery } from "./formats/readers.js";
+import { FABRICS } from "./fabrics.js";
+import { adjustPixels } from "./photo.js";
+import { FONTS, drawText, measureText } from "./text.js";
+import { saveProject, listProjects, getProject, deleteProject } from "./projects.js";
+
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -42,6 +48,16 @@ const state = {
   spacing: DEFAULT_LAYER.density, // espacement global entre les rangs (mm)
   stitchLength: DEFAULT_LAYER.stitchLength,
   original: null, // image importée, avant recadrage
+  mode: "image", // image | file (fichier de broderie importé)
+  filePattern: null, // points du fichier importé (1/10 mm, centrés)
+  rgbaBase: null, // pixels avant retouche photo
+  photo: { brightness: 0, contrast: 0, saturation: 100 },
+  fabricType: "coton",
+  threadChart: "brother",
+  projectId: null,
+  guideStep: 0,
+  pendingWidthMm: null,
+  pendingTextOnly: false, // motif texte seul : l'intérieur des lettres reste vide
   hoop: MACHINES[DEFAULT_MACHINE].hoops[0],
   view: "stitch",
   tool: "pan",
@@ -187,8 +203,11 @@ function readFileAsImage(file) {
   });
 }
 
+const EMB_EXT = /\.(dst|exp|jef|pes|pec|vp3)$/i;
+
 async function loadFile(file) {
   if (!file) return;
+  if (EMB_EXT.test(file.name)) return loadEmbroideryFile(file);
   if (!/^image\//.test(file.type) && !/\.(png|jpe?g|svg|webp|gif|bmp)$/i.test(file.name)) {
     toast("Format non pris en charge. Utilisez PNG, JPG, SVG ou WEBP.", "bad");
     return;
@@ -215,7 +234,9 @@ $("#btnCrop").addEventListener("click", async () => {
   if (cropped) loadImage(cropped, state.fileName);
 });
 
-function loadImage(img, name) {
+function loadImage(img, name, { widthMm = null } = {}) {
+  state.pendingWidthMm = widthMm;
+  leaveFileMode();
   let iw = img.naturalWidth || img.width || 800;
   let ih = img.naturalHeight || img.height || 800;
   const long = Math.max(iw, ih);
@@ -232,8 +253,10 @@ function loadImage(img, name) {
   state.source = c;
   state.w = w;
   state.h = h;
-  state.rgba = cx.getImageData(0, 0, w, h).data;
+  state.rgbaBase = cx.getImageData(0, 0, w, h).data;
+  state.rgba = adjustPixels(state.rgbaBase, state.photo);
   state.fileName = name || "motif";
+  state.projectId = null;
   $("#fileName").textContent = state.fileName;
   $("#designName").value = safeDesignName(state.fileName);
   state.undo = [];
@@ -257,6 +280,91 @@ async function loadSample() {
   img.src = "assets/exemple.svg";
 }
 
+// ------------------------------------------------------------------ fichier de broderie importé
+
+function leaveFileMode() {
+  if (state.mode !== "file") return;
+  state.mode = "image";
+  state.filePattern = null;
+  document.body.classList.remove("file-mode");
+}
+
+async function loadEmbroideryFile(file) {
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const p = readEmbroidery(file.name, bytes);
+    openFilePattern(p, file.name.replace(/\.[^.]+$/, ""));
+    toast(`${file.name} ouvert : ${fmt(state.pattern.stats.stitchCount)} points. Redimensionnez-le ou exportez-le dans un autre format.`, "ok");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+}
+
+function openFilePattern(p, name, widthMm = null) {
+  const stitches = scalePattern(p.stitches, 1);
+  const [x0, y0, x1, y1] = patternBounds(stitches.filter((s) => s[2] === STITCH));
+  state.mode = "file";
+  state.filePattern = { stitches, threads: p.threads };
+  // Monde : 1 px = 0,1 mm à l'échelle d'origine.
+  state.w = Math.max(10, x1 - x0);
+  state.h = Math.max(10, y1 - y0);
+  const c = document.createElement("canvas");
+  c.width = 1;
+  c.height = 1;
+  state.source = c;
+  state.original = null;
+  state.labels = new Int16Array(0);
+  state.vectors = new Map();
+  state.paths = new Map();
+  state.layers = p.threads.map((t, i) => ({ id: i, source: t.color, color: t.color, name: t.name || threadLabel(t.color), visible: true, ...DEFAULT_LAYER }));
+  state.widthMm = widthMm || state.w / 10;
+  state.fileName = name;
+  state.projectId = null;
+  state.undo = [];
+  state.redo = [];
+  updateHistoryButtons();
+  $("#fileName").textContent = name;
+  $("#designName").value = safeDesignName(name);
+  document.body.classList.add("has-image", "file-mode");
+  $("#emptyState").hidden = true;
+  $("#btnCrop").disabled = true;
+  stitchNow();
+  refreshUI();
+  setView("stitch");
+  fitView();
+}
+
+$("#embInput").addEventListener("change", (e) => {
+  if (e.target.files[0]) loadEmbroideryFile(e.target.files[0]);
+  e.target.value = "";
+});
+
+// ------------------------------------------------------------------ retouche photo
+
+for (const k of ["brightness", "contrast", "saturation"]) {
+  $("#" + k).addEventListener("input", (e) => ($("#" + k + "Out").textContent = e.target.value));
+  $("#" + k).addEventListener("change", (e) => {
+    state.photo[k] = Number(e.target.value);
+    applyPhoto();
+  });
+}
+$("#btnResetPhoto").addEventListener("click", () => {
+  state.photo = { brightness: 0, contrast: 0, saturation: 100 };
+  syncPhotoUI();
+  applyPhoto();
+});
+function applyPhoto() {
+  if (!state.rgbaBase || state.mode === "file") return;
+  state.rgba = adjustPixels(state.rgbaBase, state.photo);
+  runAnalyze();
+}
+function syncPhotoUI() {
+  for (const k of ["brightness", "contrast", "saturation"]) {
+    $("#" + k).value = state.photo[k];
+    $("#" + k + "Out").textContent = state.photo[k];
+  }
+}
+
 // ------------------------------------------------------------------ pipeline
 
 function withBusy(fn) {
@@ -278,16 +386,25 @@ function runAnalyze({ fitSize = false } = {}) {
   withBusy(() => {
     const { labels, layers, background } = analyzeImage(state.rgba, state.w, state.h, state.settings);
     state.labels = labels;
+    const fab = FABRICS[state.fabricType] || FABRICS.coton;
     for (const L of layers) {
       L.density = state.spacing;
       L.stitchLength = state.stitchLength;
+      L.pullComp = fab.pullComp;
+      L.underlay = fab.underlay;
+      L.name = threadLabel(L.color) + (L.name.endsWith("(intérieur)") ? " (intérieur)" : "");
+    }
+    if (state.pendingTextOnly) {
+      for (const L of layers) if (L.name.endsWith("(intérieur)")) L.type = "none";
+      state.pendingTextOnly = false;
     }
     state.layers = layers;
     state.background = background;
     state.selected = (layers.find((L) => L.type !== "none") || layers[0] || {}).id ?? null;
     state.expanded.clear();
     if (fitSize) {
-      state.widthMm = 100;
+      state.widthMm = state.pendingWidthMm || 100;
+      state.pendingWidthMm = null;
       const fit = hoopFitWidth();
       if (fit && fit < state.widthMm) state.widthMm = Math.floor(fit);
     }
@@ -308,6 +425,22 @@ function vectorizeNow() {
 function stitchNow() {
   const { mmPerPx } = geometry();
   state.patternScale = mmPerPx;
+  if (state.mode === "file") {
+    // Fichier importé : simple mise à l'échelle des points existants.
+    const stitches = scalePattern(state.filePattern.stitches, 10 * mmPerPx);
+    const threads = state.layers.map((L) => ({ color: L.color, name: L.name }));
+    state.pattern = {
+      stitches,
+      threads,
+      origin: [(state.w / 2) * mmPerPx, (state.h / 2) * mmPerPx],
+      stats: patternStats(stitches, threads),
+      layerIds: state.layers.map((L) => L.id),
+      steps: [],
+    };
+    state.progress = stitches.length;
+    stitchCache = null;
+    return;
+  }
   state.pattern = stitchDesign(state.layers, state.vectors, mmPerPx, {
     style: state.style,
     outlineColor: state.outlineColor,
@@ -353,6 +486,10 @@ function refreshAll() {
 // ------------------------------------------------------------------ géométrie
 
 function geometry() {
+  if (state.mode === "file") {
+    const mmPerPx = state.widthMm / state.w;
+    return { box: { x: 0, y: 0, w: state.w, h: state.h }, mmPerPx, heightMm: state.h * mmPerPx };
+  }
   if (!state.labels) return { box: { x: 0, y: 0, w: 1, h: 1 }, mmPerPx: 1, heightMm: 0 };
   const ignored = new Set(state.layers.filter((L) => L.type === "none").map((L) => L.id));
   const box = contentBounds(state.labels, state.w, state.h, ignored);
@@ -760,6 +897,10 @@ let spaceDown = false;
 canvas.addEventListener("pointerdown", (e) => {
   if (!state.labels) return;
   canvas.setPointerCapture(e.pointerId);
+  if (state.mode === "file") {
+    pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
+    return;
+  }
   const panning = state.tool === "pan" || e.button === 1 || spaceDown || state.view === "stitch" || state.view === "original";
   if (panning) {
     pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
@@ -770,6 +911,17 @@ canvas.addEventListener("pointerdown", (e) => {
   if (state.tool === "picker") {
     const l = labelAt(p[0], p[1]);
     if (l !== null && l >= 0) selectLayer(l);
+    return;
+  }
+  if (state.tool === "wand") {
+    // Baguette : retire toute la zone de même couleur (fond, reflet…).
+    const l = labelAt(p[0], p[1]);
+    if (l === null || l < 0) return;
+    pushHistory();
+    floodFill(p[0], p[1], -1);
+    updateRaster();
+    render();
+    scheduleVectorize(10);
     return;
   }
   if (state.tool === "bucket") {
@@ -857,14 +1009,37 @@ function layerCounts() {
 const TYPE_OPTIONS = Object.entries(STITCH_TYPES)
   .map(([k, v]) => `<option value="${k}">${v}</option>`)
   .join("");
-const PEC_OPTIONS = PEC_THREADS.map((t, i) => (t ? `<option value="#${t[0]}" style="background:#${t[0]}">${i}. ${t[1]}</option>` : ""))
-  .join("");
+function chartOptions() {
+  return THREAD_CHARTS[state.threadChart].threads
+    .map((t) => `<option value="#${t[0]}" style="background:#${t[0]}">${t[2]} · ${t[1]}</option>`)
+    .join("");
+}
+
+/** Nom du fil le plus proche dans le nuancier choisi, ex. « Red · 5 ». */
+function threadLabel(hex) {
+  const t = nearestInChart(hex, state.threadChart);
+  return `${t.name} · ${t.ref}`;
+}
 
 function renderLayers() {
   syncStitchPick();
   const list = $("#layers");
   const counts = layerCounts();
   list.innerHTML = "";
+  if (state.mode === "file") {
+    // Fichier importé : un bloc par couleur, seule la couleur se modifie.
+    state.layers.forEach((L, idx) => {
+      const st = counts.get(L.id);
+      const li = document.createElement("li");
+      li.className = "layer";
+      li.dataset.id = L.id;
+      li.innerHTML = `<div class="layer-main"><span class="order">${idx + 1}</span>
+        <input type="color" class="swatch" data-act="color" value="${L.color.toLowerCase()}" title="Couleur du fil" />
+        <div class="layer-name"><b>${L.name}</b><small>${L.color} · ${st ? fmt(st.stitches) + " pts" : "—"}</small></div></div>`;
+      list.appendChild(li);
+    });
+    return;
+  }
   state.layers.forEach((L, idx) => {
     const li = document.createElement("li");
     li.className = "layer" + (L.id === state.selected ? " selected" : "") + (!L.visible || L.type === "none" ? " off" : "");
@@ -917,8 +1092,8 @@ function renderLayers() {
           <label class="check small"><input type="checkbox" data-act="triple" ${L.triple ? "checked" : ""}/> Point triple</label>
         </div>
         <div class="field">
-          <label>Fil du nuancier Brother</label>
-          <select data-act="thread"><option value="">— choisir un fil —</option>${PEC_OPTIONS}</select>
+          <label>Fil du nuancier ${THREAD_CHARTS[state.threadChart].label}</label>
+          <select data-act="thread"><option value="">— choisir un fil —</option>${chartOptions()}</select>
         </div>
         <div class="field">
           <label>Fusionner avec</label>
@@ -980,7 +1155,7 @@ $("#layers").addEventListener("change", (e) => {
   pushHistory();
   if (act === "color" || act === "thread") {
     L.color = el.value.toUpperCase();
-    L.name = nearestThreadName(L.color).name;
+    L.name = threadLabel(L.color);
     updateRaster();
     changedLayers();
   } else if (act === "type") {
@@ -1028,7 +1203,7 @@ $("#btnAddLayer").addEventListener("click", () => {
   const used = new Set(state.layers.map((L) => L.color));
   const color = NEW_COLORS.find((c) => !used.has(c)) || "#E4572E";
   const id = Math.max(-1, ...state.layers.map((L) => L.id)) + 1;
-  state.layers.push({ id, source: color, color, name: nearestThreadName(color).name, visible: true, ...DEFAULT_LAYER });
+  state.layers.push({ id, source: color, color, name: threadLabel(color), visible: true, ...DEFAULT_LAYER, density: state.spacing });
   state.selected = id;
   state.expanded.add(id);
   renderLayers();
@@ -1057,6 +1232,7 @@ function refreshUI() {
   $("#btnExport").disabled = !state.pattern || !state.pattern.stats.stitchCount;
   $("#btnQuick").disabled = $("#btnExport").disabled;
   $("#btnSaveProject").disabled = !state.labels;
+  $("#btnGuide").disabled = !state.pattern || !state.pattern.stats.stitchCount;
   const total = state.pattern ? state.pattern.stitches.length : 0;
   $("#progress").max = total;
   $("#progress").value = state.progress;
@@ -1119,6 +1295,7 @@ $("#widthMm").addEventListener("change", (e) => {
   state.widthMm = v;
   refreshUI();
   scheduleStitch(0);
+  if (state.mode === "file") setTimeout(fitView, 150);
 });
 $("#heightMm").addEventListener("change", (e) => {
   const v = Number(e.target.value);
@@ -1127,6 +1304,7 @@ $("#heightMm").addEventListener("change", (e) => {
   state.widthMm = (v * box.w) / box.h;
   refreshUI();
   scheduleStitch(0);
+  if (state.mode === "file") setTimeout(fitView, 150);
 });
 const HOOP_LABEL = (h) => {
   const [w, hh] = h.split("x").map(Number);
@@ -1351,7 +1529,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     redo();
   } else if (!mod) {
-    const map = { h: "pan", b: "brush", e: "eraser", g: "bucket", i: "picker" };
+    const map = { h: "pan", b: "brush", e: "eraser", g: "bucket", i: "picker", w: "wand" };
     const views = { 1: "original", 2: "raster", 3: "vector", 4: "stitch" };
     if (map[e.key]) setTool(map[e.key]);
     else if (views[e.key]) setView(views[e.key]);
@@ -1367,6 +1545,281 @@ document.addEventListener("keyup", (e) => {
   if (e.key === " ") spaceDown = false;
 });
 
+// ------------------------------------------------------------------ tissu & nuancier
+
+$("#fabricType").innerHTML = Object.entries(FABRICS)
+  .map(([k, f]) => `<option value="${k}">${f.label}</option>`)
+  .join("");
+$("#fabricType").addEventListener("change", (e) => {
+  state.fabricType = e.target.value;
+  const f = FABRICS[state.fabricType];
+  pushHistory();
+  state.spacing = f.spacing;
+  state.stitchLength = f.stitchLength;
+  for (const L of state.layers) {
+    L.density = f.spacing;
+    L.stitchLength = f.stitchLength;
+    L.pullComp = f.pullComp;
+    L.underlay = f.underlay;
+  }
+  syncStyleUI();
+  syncFabricUI();
+  renderLayers();
+  scheduleStitch(0);
+});
+function syncFabricUI() {
+  $("#fabricType").value = state.fabricType;
+  $("#fabricTip").textContent = FABRICS[state.fabricType]?.tip || "";
+}
+
+$("#threadChart").innerHTML = Object.entries(THREAD_CHARTS)
+  .map(([k, c]) => `<option value="${k}">${c.label}</option>`)
+  .join("");
+$("#threadChart").addEventListener("change", (e) => {
+  state.threadChart = e.target.value;
+  try {
+    localStorage.setItem("filtrace.chart", state.threadChart);
+  } catch {}
+  for (const L of state.layers) L.name = threadLabel(L.color) + (L.name.endsWith("(intérieur)") ? " (intérieur)" : "");
+  renderLayers();
+  if (state.pattern) state.pattern.threads.forEach((t, i) => (t.name = state.layers.find((L) => L.color === t.color)?.name || t.name));
+});
+
+// ------------------------------------------------------------------ texte
+
+$("#textFont").innerHTML = FONTS.map((f) => `<option value="${f.family}">${f.label}</option>`).join("");
+let textPreviewTimer = null;
+
+function textOptions() {
+  return {
+    text: $("#textValue").value.trim() || "Texte",
+    font: $("#textFont").value,
+    sizeMm: Math.max(4, Number($("#textSize").value) || 15),
+    pos: $("#textPos").value,
+    color: $("#textColor").value.toUpperCase(),
+  };
+}
+
+async function drawTextPreview() {
+  const c = $("#textPreview");
+  const g = c.getContext("2d");
+  const o = textOptions();
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, c.width, c.height);
+  const m = await measureText(o.text, { font: o.font, px: 60 });
+  const k = Math.min(1, (c.width - 40) / m.width, (c.height - 30) / m.height);
+  await drawText(g, o.text, { font: o.font, px: 60 * k, color: o.color, cx: c.width / 2, cy: c.height / 2 });
+}
+
+function openTextDialog() {
+  $("#textAdd").disabled = !state.labels || state.mode === "file";
+  $("#textDialog").showModal();
+  drawTextPreview();
+}
+$("#btnText").addEventListener("click", openTextDialog);
+$("#textCancel").addEventListener("click", () => $("#textDialog").close());
+for (const id of ["textValue", "textFont", "textSize", "textColor"]) {
+  $("#" + id).addEventListener("input", () => {
+    clearTimeout(textPreviewTimer);
+    textPreviewTimer = setTimeout(drawTextPreview, 120);
+  });
+}
+
+// Motif composé uniquement de texte, à la taille réelle demandée.
+$("#textNew").addEventListener("click", async () => {
+  const o = textOptions();
+  const pxPerMm = 8;
+  const m = await measureText(o.text, { font: o.font, px: o.sizeMm * pxPerMm });
+  const pad = 30;
+  const c = document.createElement("canvas");
+  c.width = Math.ceil(m.width + pad * 2);
+  c.height = Math.ceil(m.height + pad * 2);
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, c.width, c.height);
+  await drawText(g, o.text, { font: o.font, px: o.sizeMm * pxPerMm, color: o.color, cx: c.width / 2, cy: c.height / 2 });
+  $("#textDialog").close();
+  state.settings.colors = 2;
+  state.style = "fill";
+  syncSettingsUI();
+  state.original = c;
+  state.pendingTextOnly = true;
+  // Largeur réelle du texte (sans les marges blanches retirées au calcul).
+  loadImage(c, o.text.split(/\s/)[0] || "texte", { widthMm: m.width / pxPerMm });
+});
+
+// Texte ajouté à l'image en cours : nouveau calque à la bonne taille.
+$("#textAdd").addEventListener("click", async () => {
+  if (!state.labels || state.mode === "file") return;
+  const o = textOptions();
+  const { box, mmPerPx } = geometry();
+  const px = o.sizeMm / mmPerPx;
+  const m = await measureText(o.text, { font: o.font, px });
+  const gap = px * 0.6;
+  // Place libre au-dessus / en dessous : on agrandit l'image si nécessaire.
+  let cy;
+  if (o.pos === "center") cy = box.y + box.h / 2;
+  else if (o.pos === "top") cy = box.y - gap - m.height / 2;
+  else cy = box.y + box.h + gap + m.height / 2;
+  const cx = box.x + box.w / 2;
+  const needTop = Math.max(0, Math.ceil(m.height / 2 - cy + 4));
+  const needBottom = Math.max(0, Math.ceil(cy + m.height / 2 - state.h + 4));
+  const needSide = Math.max(0, Math.ceil(m.width / 2 - cx + 4), Math.ceil(cx + m.width / 2 - state.w + 4));
+  pushHistory();
+  growCanvas(needTop, needBottom, needSide);
+  const ox = needSide;
+  const oy = needTop;
+  // Dessin des lettres dans l'image source et dans un masque.
+  const sg = state.source.getContext("2d", { willReadFrequently: true });
+  await drawText(sg, o.text, { font: o.font, px, color: o.color, cx: cx + ox, cy: cy + oy });
+  const mask = document.createElement("canvas");
+  mask.width = state.w;
+  mask.height = state.h;
+  const mg = mask.getContext("2d", { willReadFrequently: true });
+  await drawText(mg, o.text, { font: o.font, px, color: "#000", cx: cx + ox, cy: cy + oy });
+  const md = mg.getImageData(0, 0, state.w, state.h).data;
+  const id = Math.max(-1, ...state.layers.map((L) => L.id)) + 1;
+  for (let i = 0; i < state.labels.length; i++) if (md[i * 4 + 3] >= 128) state.labels[i] = id;
+  state.rgbaBase = sg.getImageData(0, 0, state.w, state.h).data;
+  state.rgba = adjustPixels(state.rgbaBase, state.photo);
+  state.layers.push({ id, source: o.color, color: o.color, name: threadLabel(o.color) + " (texte)", visible: true, ...DEFAULT_LAYER, density: state.spacing });
+  // Garde l'échelle : le texte fait bien la hauteur demandée.
+  const before = mmPerPx;
+  state.selected = id;
+  $("#textDialog").close();
+  withBusy(() => {
+    vectorizeNow();
+    state.widthMm = geometry().box.w * before;
+    stitchNow();
+    refreshUI();
+    fitView();
+  });
+});
+
+/** Agrandit l'image de travail (marges blanches) en conservant les calques. */
+function growCanvas(top, bottom, side) {
+  if (!top && !bottom && !side) return;
+  const w = state.w + side * 2;
+  const h = state.h + top + bottom;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, w, h);
+  g.drawImage(state.source, side, top);
+  const labels = new Int16Array(w * h).fill(-1);
+  for (let y = 0; y < state.h; y++) labels.set(state.labels.subarray(y * state.w, (y + 1) * state.w), (y + top) * w + side);
+  state.source = c;
+  state.labels = labels;
+  state.w = w;
+  state.h = h;
+  state.rgbaBase = g.getImageData(0, 0, w, h).data;
+  state.rgba = adjustPixels(state.rgbaBase, state.photo);
+}
+
+// ------------------------------------------------------------------ guide de broderie
+
+const STEP_NOTES = {
+  placement: "Brodez la ligne de placement, puis posez le morceau de tissu dessus pour la recouvrir.",
+  fixation: "La machine fixe le tissu. Retirez le cadre sans démonter et découpez le tissu au ras de la couture.",
+  bordure: "Bordure satin : elle recouvre le bord coupé du tissu.",
+};
+
+function guideBlocks() {
+  const p = state.pattern;
+  if (!p) return [];
+  const blocks = [];
+  let start = 0;
+  let trims = 0;
+  p.stitches.forEach((s, i) => {
+    if (s[2] === TRIM) trims++;
+    if (s[2] === COLOR_CHANGE || i === p.stitches.length - 1) {
+      blocks.push({ end: i + 1, trims });
+      start = i + 1;
+      trims = 0;
+    }
+  });
+  return blocks.map((b, i) => ({
+    ...b,
+    thread: p.threads[i] || p.threads[p.threads.length - 1],
+    stats: p.stats.layers[i],
+    step: p.steps?.[i] || null,
+  }));
+}
+
+function renderGuide() {
+  const blocks = guideBlocks();
+  const m = MACHINES[state.machine];
+  $("#guideIntro").textContent =
+    `${blocks.length} étape(s) de fil pour ${m.label}. ` +
+    (m.trims === false ? "Votre machine ne coupe pas le fil toute seule : coupez les fils de saut à la fin de chaque couleur. " : "") +
+    "Touchez une étape pour voir ce qui est brodé jusque-là.";
+  const cur = Math.min(state.guideStep, blocks.length - 1);
+  $("#guideList").innerHTML = blocks
+    .map((b, i) => {
+      const same = i > 0 && blocks[i - 1].thread.color === b.thread.color;
+      const note = b.step ? STEP_NOTES[b.step] : same ? "Même fil : la machine s'arrête seulement." : "Changez de fil.";
+      return `<li data-step="${i}" class="${i === cur ? "current" : i < cur ? "done" : ""}">
+        <span class="sw" style="background:${b.thread.color}"></span>
+        <div><b>${i + 1}. ${b.thread.name}</b>
+          <small>${b.thread.color} · ${fmt(b.stats?.stitches || 0)} points${b.trims > 1 ? ` · ${b.trims - 1} fil(s) à couper` : ""}</small>
+          <div class="note">${note}</div></div>
+        <button class="btn small ghost" data-see="${i}">Voir</button></li>`;
+    })
+    .join("");
+  $("#guidePrev").disabled = cur <= 0;
+  $("#guideNext").disabled = cur >= blocks.length - 1;
+  showGuideStep(cur);
+}
+
+function showGuideStep(i) {
+  const blocks = guideBlocks();
+  if (!blocks[i]) return;
+  state.guideStep = i;
+  stopPlay();
+  if (state.view !== "stitch") setView("stitch");
+  state.progress = blocks[i].end;
+  $("#progress").value = state.progress;
+  render();
+}
+
+$("#btnGuide").addEventListener("click", () => {
+  state.guideStep = 0;
+  renderGuide();
+  $("#guideDialog").showModal();
+});
+$("#guideClose").addEventListener("click", () => $("#guideDialog").close());
+$("#guidePrev").addEventListener("click", () => {
+  state.guideStep = Math.max(0, state.guideStep - 1);
+  renderGuide();
+});
+$("#guideNext").addEventListener("click", () => {
+  state.guideStep++;
+  renderGuide();
+});
+$("#guideList").addEventListener("click", (e) => {
+  const li = e.target.closest("[data-step]");
+  if (!li) return;
+  state.guideStep = Number(li.dataset.step);
+  renderGuide();
+});
+
+// ------------------------------------------------------------------ onglets téléphone
+
+function setMobileTab(tab) {
+  if (tab === "export") {
+    if (state.pattern) $("#btnExport").click();
+    return;
+  }
+  document.body.dataset.mtab = tab;
+  $$("#mobileTabs [data-mtab]").forEach((b) => b.classList.toggle("active", b.dataset.mtab === tab));
+  if (tab === "apercu") requestAnimationFrame(() => (resizeCanvas(), fitView()));
+  window.scrollTo(0, 0);
+}
+$$("#mobileTabs [data-mtab]").forEach((b) => b.addEventListener("click", () => setMobileTab(b.dataset.mtab)));
+document.body.dataset.mtab = "apercu";
+
 // ------------------------------------------------------------------ export
 
 function designName() {
@@ -1374,6 +1827,7 @@ function designName() {
 }
 
 function exportSVG() {
+  if (state.mode === "file") return new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>');
   const { box, mmPerPx } = geometry();
   const groups = state.layers
     .filter((L) => L.type !== "none" && L.visible)
@@ -1422,8 +1876,10 @@ function sheetHTML(previewDataUrl) {
     .map((L, i) => {
       const bro = nearestThreadIndex(L.color, PEC_THREADS);
       const jan = nearestThreadIndex(L.color, JEF_THREADS);
-      return `<tr><td>${i + 1}</td><td><span class="sw" style="background:${L.color}"></span>${L.color}</td>
-        <td>${bro} · ${PEC_THREADS[bro][1]}</td><td>${jan} · ${JEF_THREADS[jan][1]}</td>
+      const hus = nearestInChart(L.color, "husqvarna");
+      const step = p.steps?.[i] ? ` <em>(${APPLIQUE_LABELS[p.steps[i]]})</em>` : "";
+      return `<tr><td>${i + 1}</td><td><span class="sw" style="background:${L.color}"></span>${L.color}${step}</td>
+        <td>${bro} · ${PEC_THREADS[bro][1]}</td><td>${jan} · ${JEF_THREADS[jan][1]}</td><td>${hus.ref} · ${hus.name}</td>
         <td>${fmt(L.stitches)}</td><td>${fmt(L.lengthMm / 1000, 1)} m</td></tr>`;
     })
     .join("");
@@ -1444,13 +1900,14 @@ dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}dt{color:#6
 <dt>Points</dt><dd>${fmt(s.stitchCount)}</dd><dt>Couleurs</dt><dd>${s.colors}</dd>
 <dt>Coupes</dt><dd>${s.trims}</dd><dt>Durée estimée</dt><dd>≈ ${fmt(Math.max(1, Math.round(s.minutes)))} min</dd>
 <dt>Cadre</dt><dd>${state.hoop === "none" ? "—" : state.hoop.replace("x", " × ") + " mm"}</dd></dl></div>
-<table><thead><tr><th>#</th><th>Couleur</th><th>Brother</th><th>Janome</th><th>Points</th><th>Fil</th></tr></thead><tbody>${rows}</tbody></table>
+<table><thead><tr><th>#</th><th>Couleur</th><th>Brother</th><th>Janome</th><th>Husqvarna</th><th>Points</th><th>Fil</th></tr></thead><tbody>${rows}</tbody></table>
 </body></html>`;
 }
 
 async function exportExtra(kind) {
   const name = designName();
-  if (kind === "svg") download(exportSVG(), `${name}.svg`, "image/svg+xml");
+  if (kind === "svg" && state.mode === "file") toast("Le SVG n'est pas disponible pour un fichier de broderie importé.", "bad");
+  else if (kind === "svg") download(exportSVG(), `${name}.svg`, "image/svg+xml");
   else if (kind === "png") download(await canvasToBytes(renderPNG()), `${name}.png`, "image/png");
   else if (kind === "sheet") {
     const html = sheetHTML(renderPNG(6).toDataURL("image/png"));
@@ -1518,11 +1975,25 @@ function fromBase64(str) {
   return out;
 }
 
-$("#btnSaveProject").addEventListener("click", () => {
-  const project = {
+function projectData() {
+  const common = {
     app: "filtrace",
-    version: 1,
+    version: 2,
     name: state.fileName,
+    widthMm: state.widthMm,
+    hoop: state.hoop,
+    machine: state.machine,
+    format: state.format,
+    fabric: state.fabric,
+    fabricType: state.fabricType,
+    threadChart: state.threadChart,
+  };
+  if (state.mode === "file") {
+    return { ...common, mode: "file", stitches: state.filePattern.stitches, threads: state.layers.map((L) => ({ color: L.color, name: L.name })) };
+  }
+  return {
+    ...common,
+    mode: "image",
     w: state.w,
     h: state.h,
     image: state.source.toDataURL("image/png"),
@@ -1530,73 +2001,173 @@ $("#btnSaveProject").addEventListener("click", () => {
     layers: state.layers,
     background: state.background,
     settings: state.settings,
-    widthMm: state.widthMm,
-    hoop: state.hoop,
-    machine: state.machine,
-    format: state.format,
+    photo: state.photo,
     style: state.style,
     outlineColor: state.outlineColor,
     outlineTriple: state.outlineTriple,
     outlineLength: state.outlineLength,
     spacing: state.spacing,
     stitchLength: state.stitchLength,
-    fabric: state.fabric,
   };
-  download(JSON.stringify(project), `${designName()}.filtrace.json`, "application/json");
+}
+
+async function loadProjectData(project, id = null) {
+  if (project.app !== "filtrace") throw new Error("Ce fichier n'est pas un projet FilTrace.");
+  const common = {
+    hoop: project.hoop || state.hoop,
+    machine: MACHINES[project.machine] ? project.machine : state.machine,
+    format: FORMATS[project.format] ? project.format : state.format,
+    fabric: project.fabric || state.fabric,
+    fabricType: FABRICS[project.fabricType] ? project.fabricType : state.fabricType,
+    threadChart: THREAD_CHARTS[project.threadChart] ? project.threadChart : state.threadChart,
+  };
+  if (project.mode === "file") {
+    Object.assign(state, common);
+    openFilePattern({ stitches: project.stitches, threads: project.threads }, project.name || "motif", project.widthMm);
+    state.projectId = id;
+    syncSettingsUI();
+    return;
+  }
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error("Image du projet illisible"));
+    img.src = project.image;
+  });
+  const c = document.createElement("canvas");
+  c.width = project.w;
+  c.height = project.h;
+  const cx = c.getContext("2d", { willReadFrequently: true });
+  cx.drawImage(img, 0, 0);
+  leaveFileMode();
+  const base = cx.getImageData(0, 0, project.w, project.h).data;
+  const photo = { brightness: 0, contrast: 0, saturation: 100, ...project.photo };
+  Object.assign(state, common, {
+    source: c,
+    w: project.w,
+    h: project.h,
+    rgbaBase: base,
+    rgba: adjustPixels(base, photo),
+    photo,
+    fileName: project.name || "motif",
+    labels: new Int16Array(fromBase64(project.labels).buffer),
+    layers: project.layers,
+    background: project.background,
+    settings: { ...DEFAULT_SETTINGS, ...project.settings },
+    widthMm: project.widthMm,
+    style: project.style || "fill",
+    outlineColor: project.outlineColor || state.outlineColor,
+    outlineTriple: !!project.outlineTriple,
+    outlineLength: project.outlineLength || 2.5,
+    spacing: project.spacing || DEFAULT_LAYER.density,
+    stitchLength: project.stitchLength || DEFAULT_LAYER.stitchLength,
+    original: img,
+    selected: project.layers[0]?.id ?? null,
+    projectId: id,
+    undo: [],
+    redo: [],
+  });
+  syncSettingsUI();
+  $("#fileName").textContent = state.fileName;
+  $("#designName").value = safeDesignName(state.fileName);
+  document.body.classList.add("has-image");
+  $("#emptyState").hidden = true;
+  updateHistoryButtons();
+  $("#btnCrop").disabled = false;
+  refreshAll();
+  fitView();
+}
+
+// Enregistrer dans « Mes projets » (IndexedDB, sur l'appareil).
+$("#btnSaveProject").addEventListener("click", async () => {
+  if (!state.pattern) return;
+  try {
+    const data = projectData();
+    const id = state.projectId || `p${Date.now().toString(36)}`;
+    const s = state.pattern.stats;
+    await saveProject({
+      ...data,
+      id,
+      updatedAt: Date.now(),
+      thumb: renderPNG(2).toDataURL("image/png"),
+      heightMm: s.heightMm,
+      stitchCount: s.stitchCount,
+    });
+    state.projectId = id;
+    toast(`« ${state.fileName} » enregistré dans Mes projets.`, "ok");
+  } catch (e) {
+    toast("Enregistrement impossible sur cet appareil : " + e.message, "bad");
+  }
+});
+
+async function renderProjects() {
+  const list = $("#projectList");
+  let items = [];
+  try {
+    items = await listProjects();
+  } catch {
+    list.innerHTML = `<li class="empty-note">Les projets ne peuvent pas être enregistrés dans ce navigateur (mode privé ?).</li>`;
+    return;
+  }
+  if (!items.length) {
+    list.innerHTML = `<li class="empty-note">Aucun projet pour l'instant. Utilisez « Enregistrer » en haut de l'éditeur.</li>`;
+    return;
+  }
+  list.innerHTML = items
+    .map(
+      (p) => `<li data-id="${p.id}">
+        <img src="${p.thumb || "assets/favicon.svg"}" alt="" />
+        <div class="meta"><b></b><small>${new Date(p.updatedAt).toLocaleString("fr-FR")} · ${fmt(p.widthMm || 0)} × ${fmt(p.heightMm || 0)} mm</small></div>
+        <div class="acts">
+          <button class="btn small primary" data-pact="open">Ouvrir</button>
+          <button class="btn small ghost" data-pact="download">Télécharger</button>
+          <button class="btn small ghost danger" data-pact="delete">Supprimer</button>
+        </div></li>`,
+    )
+    .join("");
+  // Nom inséré en texte (jamais en HTML).
+  items.forEach((p) => (list.querySelector(`[data-id="${p.id}"] .meta b`).textContent = p.name || "motif"));
+}
+
+$("#btnProjects").addEventListener("click", () => {
+  renderProjects();
+  $("#projectsDialog").showModal();
+});
+$("#projectsClose").addEventListener("click", () => $("#projectsDialog").close());
+$("#projectList").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-pact]");
+  const li = e.target.closest("[data-id]");
+  if (!b || !li) return;
+  const id = li.dataset.id;
+  try {
+    if (b.dataset.pact === "open") {
+      const p = await getProject(id);
+      $("#projectsDialog").close();
+      await loadProjectData(p, id);
+    } else if (b.dataset.pact === "download") {
+      const { thumb, ...p } = await getProject(id);
+      download(JSON.stringify(p), `${safeDesignName(p.name || "motif")}.filtrace.json`, "application/json");
+    } else if (b.dataset.pact === "delete") {
+      if (b.dataset.confirm !== "1") {
+        b.dataset.confirm = "1";
+        b.textContent = "Confirmer la suppression";
+        return;
+      }
+      await deleteProject(id);
+      if (state.projectId === id) state.projectId = null;
+      renderProjects();
+    }
+  } catch (err) {
+    toast(err.message, "bad");
+  }
 });
 
 $("#projectInput").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    const project = JSON.parse(await file.text());
-    if (project.app !== "filtrace") throw new Error("Ce fichier n'est pas un projet FilTrace.");
-    const img = new Image();
-    await new Promise((res, rej) => {
-      img.onload = res;
-      img.onerror = () => rej(new Error("Image du projet illisible"));
-      img.src = project.image;
-    });
-    const c = document.createElement("canvas");
-    c.width = project.w;
-    c.height = project.h;
-    const cx = c.getContext("2d", { willReadFrequently: true });
-    cx.drawImage(img, 0, 0);
-    Object.assign(state, {
-      source: c,
-      w: project.w,
-      h: project.h,
-      rgba: cx.getImageData(0, 0, project.w, project.h).data,
-      fileName: project.name || "motif",
-      labels: new Int16Array(fromBase64(project.labels).buffer),
-      layers: project.layers,
-      background: project.background,
-      settings: { ...DEFAULT_SETTINGS, ...project.settings },
-      widthMm: project.widthMm,
-      hoop: project.hoop,
-      machine: MACHINES[project.machine] ? project.machine : state.machine,
-      format: FORMATS[project.format] ? project.format : state.format,
-      style: project.style || "fill",
-      outlineColor: project.outlineColor || state.outlineColor,
-      outlineTriple: !!project.outlineTriple,
-      outlineLength: project.outlineLength || 2.5,
-      spacing: project.spacing || DEFAULT_LAYER.density,
-      stitchLength: project.stitchLength || DEFAULT_LAYER.stitchLength,
-      original: img,
-      fabric: project.fabric || state.fabric,
-      selected: project.layers[0]?.id ?? null,
-      undo: [],
-      redo: [],
-    });
-    syncSettingsUI();
-    $("#fileName").textContent = state.fileName;
-    $("#designName").value = safeDesignName(state.fileName);
-    document.body.classList.add("has-image");
-    $("#emptyState").hidden = true;
-    updateHistoryButtons();
-    $("#btnCrop").disabled = false;
-    refreshAll();
-    fitView();
+    $("#projectsDialog").close();
+    await loadProjectData(JSON.parse(await file.text()));
   } catch (err) {
     toast(err.message, "bad");
   }
@@ -1611,6 +2182,9 @@ function syncSettingsUI() {
   $("#removeBg").checked = state.settings.removeBackground;
   fillMachineUI();
   syncStyleUI();
+  syncFabricUI();
+  syncPhotoUI();
+  $("#threadChart").value = state.threadChart;
   $("#fabric").value = state.fabric;
 }
 
@@ -1620,6 +2194,8 @@ new ResizeObserver(() => {
   resizeCanvas();
 }).observe($("#canvasWrap"));
 try {
+  const chart = localStorage.getItem("filtrace.chart");
+  if (THREAD_CHARTS[chart]) state.threadChart = chart;
   const saved = localStorage.getItem("filtrace.machine");
   if (MACHINES[saved]) {
     state.machine = saved;

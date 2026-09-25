@@ -3,7 +3,13 @@
 
 import { quantize, detectBackground, mergeSmallRegions, smoothLabels } from "./quantize.js";
 import { vectorizeLayer } from "./trace.js";
-import { layerRuns, buildPattern, DEFAULT_LAYER } from "./stitch.js";
+import { layerRuns, buildPattern, appliqueSteps, DEFAULT_LAYER } from "./stitch.js";
+
+export const APPLIQUE_LABELS = {
+  placement: "ligne de placement",
+  fixation: "fixation du tissu",
+  bordure: "bordure satin",
+};
 import { rgbToHex, nearestThreadName } from "./threads.js";
 
 export const DEFAULT_SETTINGS = {
@@ -101,8 +107,20 @@ export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
     .map((L) => {
       const cfg = outline ? { ...L, type: "running", triple: outlineTriple, stitchLength: outlineLength } : L;
       const loops = (vectors.get(L.id) || []).map((loop) => loop.map(([x, y]) => [x * mmPerPx, y * mmPerPx]));
-      return { color: L.color, name: L.name, id: L.id, runs: layerRuns(loops, cfg) };
+      if (cfg.type === "applique" && !outline) {
+        // Trois passages séparés par un arrêt : placement, fixation, bordure.
+        return appliqueSteps(loops, cfg).map((st) => ({
+          color: L.color,
+          name: `${L.name} — ${APPLIQUE_LABELS[st.step]}`,
+          id: L.id,
+          step: st.step,
+          loops,
+          runs: st.runs,
+        }));
+      }
+      return { color: L.color, name: L.name, id: L.id, loops, runs: layerRuns(loops, cfg) };
     })
+    .flat()
     .filter((L) => L.runs.length);
   if (style === "outline1" && prepared.length) {
     // Un seul fil : tous les contours à la suite, du plus proche au plus proche.
@@ -111,6 +129,7 @@ export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
   }
   const pattern = buildPattern(prepared, buildOptions);
   pattern.layerIds = prepared.map((L) => L.id);
+  pattern.steps = prepared.map((L) => L.step || null);
   return pattern;
 }
 

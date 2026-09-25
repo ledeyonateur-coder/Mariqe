@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Dancing+Script:wght@700&family=Lobster&family=Pacifico&family=Roboto+Slab:wght@700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/app.css" />
 </head>
@@ -26,10 +26,8 @@
     <div class="topbar-actions">
       <button class="btn ghost" id="btnUndo" title="Annuler (Ctrl+Z)" disabled>↶</button>
       <button class="btn ghost" id="btnRedo" title="Rétablir (Ctrl+Maj+Z)" disabled>↷</button>
-      <label class="btn ghost" title="Ouvrir un projet FilTrace">
-        Ouvrir<input type="file" id="projectInput" accept=".json,.filtrace" hidden />
-      </label>
-      <button class="btn ghost" id="btnSaveProject" disabled>Enregistrer</button>
+      <button class="btn ghost" id="btnProjects" title="Mes projets enregistrés">Mes projets</button>
+      <button class="btn ghost" id="btnSaveProject" disabled title="Enregistrer dans Mes projets">Enregistrer</button>
       <button class="btn ghost" id="btnExport" disabled>Exporter…</button>
       <button class="btn primary" id="btnQuick" disabled>⬇ Fichier machine</button>
     </div>
@@ -49,9 +47,31 @@
           <button class="btn small ghost" id="btnCrop" disabled>✂ Recadrer</button>
           <button class="btn small ghost" id="btnSample">Exemple</button>
         </div>
+        <div class="row-buttons">
+          <button class="btn small ghost" id="btnText" title="Ajouter un prénom, un mot…">Aa Texte</button>
+          <label class="btn small ghost" title="Ouvrir un fichier DST, EXP, JEF, PES ou VP3 pour le voir, le redimensionner ou le convertir">
+            Fichier broderie<input type="file" id="embInput" accept=".dst,.exp,.jef,.pes,.pec,.vp3" hidden />
+          </label>
+        </div>
+        <details class="photo-adjust" data-needs-image data-hide-file>
+          <summary>Retouche photo</summary>
+          <div class="field">
+            <label for="brightness">Luminosité <output id="brightnessOut">0</output></label>
+            <input type="range" id="brightness" min="-60" max="60" value="0" />
+          </div>
+          <div class="field">
+            <label for="contrast">Contraste <output id="contrastOut">0</output></label>
+            <input type="range" id="contrast" min="-60" max="80" value="0" />
+          </div>
+          <div class="field">
+            <label for="saturation">Saturation <output id="saturationOut">100</output></label>
+            <input type="range" id="saturation" min="0" max="200" step="5" value="100" />
+          </div>
+          <button class="btn small ghost full" id="btnResetPhoto">Annuler les retouches</button>
+        </details>
       </section>
 
-      <section class="card" data-needs-image>
+      <section class="card" data-needs-image data-hide-file>
         <h2><span class="step">2</span> Couleurs</h2>
         <div class="field">
           <label for="style">Type de broderie</label>
@@ -60,6 +80,11 @@
             <option value="outline">Contours (chaque couleur)</option>
             <option value="outline1">Contours (un seul fil)</option>
           </select>
+        </div>
+        <div class="field" id="fabricField">
+          <label for="fabricType">Tissu</label>
+          <select id="fabricType"></select>
+          <span class="hint small" id="fabricTip"></span>
         </div>
         <div class="field" id="stitchPickField">
           <label>Type de point (tout le motif)</label>
@@ -79,6 +104,10 @@
             <button type="button" role="radio" data-type="running" title="Une ligne de points le long des contours">
               <svg viewBox="0 0 60 36" aria-hidden="true"><path d="M6 28 C18 4 42 4 54 28" fill="none" stroke="#2e933c" stroke-width="2.6" stroke-dasharray="6 2.5" stroke-linecap="round"/></svg>
               <b>Point droit</b><span>Lignes, détails</span>
+            </button>
+            <button type="button" role="radio" data-type="applique" title="Un morceau de tissu cousu, puis bordé de satin">
+              <svg viewBox="0 0 60 36" aria-hidden="true"><rect x="10" y="7" width="40" height="22" rx="4" fill="#f3d9a4"/><rect x="10" y="7" width="40" height="22" rx="4" fill="none" stroke="#8e5572" stroke-width="3.2" stroke-dasharray="1.2 0.8"/></svg>
+              <b>Appliqué</b><span>Tissu + bordure</span>
             </button>
           </div>
           <span class="hint small" id="stitchPickHint">Réglable ensuite couleur par couleur dans « Calques de fil ».</span>
@@ -143,6 +172,10 @@
           <select id="hoop"></select>
         </div>
         <div class="field">
+          <label for="threadChart">Nuancier de fils</label>
+          <select id="threadChart"></select>
+        </div>
+        <div class="field">
           <label for="fileFormat">Type de fichier</label>
           <select id="fileFormat"></select>
         </div>
@@ -166,6 +199,7 @@
           <button data-tool="eraser" title="Gomme : retirer de la broderie (E)">⌫</button>
           <button data-tool="bucket" title="Pot : recolorer une zone entière (G)">🪣</button>
           <button data-tool="picker" title="Pipette : sélectionner le calque sous le curseur (I)">⌖</button>
+          <button data-tool="wand" title="Baguette : retirer toute une zone de la broderie, ex. un fond (W)">🪄</button>
           <label class="brush-size" title="Taille du pinceau">
             <input type="range" id="brushSize" min="1" max="60" value="10" />
           </label>
@@ -196,6 +230,7 @@
         </select>
         <label class="check small"><input type="checkbox" id="showJumps" /> Sauts</label>
         <label class="fabric" title="Couleur du tissu">Tissu <input type="color" id="fabric" value="#f4efe6" /></label>
+        <button class="btn small ghost" id="btnGuide" disabled title="Ordre des fils, étape par étape">🧵 Guide</button>
       </div>
     </section>
 
@@ -204,7 +239,7 @@
       <section class="card">
         <div class="card-head">
           <h2><span class="step">4</span> Calques de fil</h2>
-          <button class="btn small ghost" id="btnAddLayer" title="Ajouter un calque à peindre">+ Calque</button>
+          <button class="btn small ghost" id="btnAddLayer" data-hide-file title="Ajouter un calque à peindre">+ Calque</button>
         </div>
         <p class="hint">Ordre de broderie de haut en bas. Choisissez le type de point de chaque couleur.</p>
         <ol class="layers" id="layers"></ol>
@@ -266,6 +301,83 @@
       <button type="button" class="btn primary" id="cropOk">Valider le recadrage</button>
     </div>
   </dialog>
+
+  <!-- Texte -->
+  <dialog id="textDialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Ajouter du texte</h2>
+      <button class="btn ghost small" id="textCancel" aria-label="Fermer">✕</button>
+    </div>
+    <div class="field">
+      <label for="textValue">Texte (plusieurs lignes possibles)</label>
+      <textarea id="textValue" rows="2" maxlength="120">Prénom</textarea>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="textFont">Police</label>
+        <select id="textFont"></select>
+      </div>
+      <div class="field">
+        <label for="textSize">Hauteur des lettres (mm)</label>
+        <input type="number" id="textSize" min="4" max="120" step="1" value="15" />
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="textPos">Position</label>
+        <select id="textPos">
+          <option value="bottom">Sous le motif</option>
+          <option value="top">Au-dessus du motif</option>
+          <option value="center">Au centre</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="textColor">Couleur du fil</label>
+        <input type="color" id="textColor" value="#1d1a16" />
+      </div>
+    </div>
+    <p class="hint small">Les lettres de moins de 5 mm de haut se brodent mal. Les lettres fines passent en satin automatiquement.</p>
+    <canvas id="textPreview" class="text-preview" width="600" height="220"></canvas>
+    <div class="crop-actions">
+      <button type="button" class="btn ghost" id="textNew">Nouveau motif texte seul</button>
+      <button type="button" class="btn primary" id="textAdd">Ajouter au motif</button>
+    </div>
+  </dialog>
+
+  <!-- Mes projets -->
+  <dialog id="projectsDialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Mes projets</h2>
+      <button class="btn ghost small" id="projectsClose" aria-label="Fermer">✕</button>
+    </div>
+    <p class="hint">Enregistrés dans ce navigateur, sur cet appareil. Utilisez « Télécharger » pour les garder ailleurs.</p>
+    <ul class="project-list" id="projectList"></ul>
+    <div class="crop-actions">
+      <label class="btn ghost">Importer un fichier projet<input type="file" id="projectInput" accept=".json,.filtrace" hidden /></label>
+    </div>
+  </dialog>
+
+  <!-- Guide de broderie -->
+  <dialog id="guideDialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Guide de broderie</h2>
+      <button class="btn ghost small" id="guideClose" aria-label="Fermer">✕</button>
+    </div>
+    <p class="hint" id="guideIntro"></p>
+    <ol class="guide-list" id="guideList"></ol>
+    <div class="crop-actions">
+      <button type="button" class="btn ghost" id="guidePrev">← Étape précédente</button>
+      <button type="button" class="btn primary" id="guideNext">Étape suivante →</button>
+    </div>
+  </dialog>
+
+  <!-- Onglets sur téléphone -->
+  <nav class="mobile-tabs" id="mobileTabs" aria-label="Sections">
+    <button data-mtab="apercu" class="active">👁<span>Aperçu</span></button>
+    <button data-mtab="reglages">⚙<span>Réglages</span></button>
+    <button data-mtab="calques">🧵<span>Calques</span></button>
+    <button data-mtab="export">⬇<span>Fichier</span></button>
+  </nav>
 
   <div class="toast" id="toast" role="status" hidden></div>
   <script type="module" src="js/app.js"></script>

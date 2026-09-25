@@ -1,6 +1,8 @@
 // Génération des points de broderie : remplissage (tatami), satin, point droit.
 // Toutes les coordonnées ici sont en millimètres.
 
+import { columnSatinRuns, borderSatinRuns, insideLoops } from "./satin.js";
+
 export const STITCH = 0;
 export const JUMP = 1;
 export const TRIM = 2;
@@ -12,6 +14,7 @@ export const STITCH_TYPES = {
   fill: "Remplissage",
   satin: "Satin",
   running: "Point droit",
+  applique: "Appliqué",
   none: "Ignorer",
 };
 
@@ -330,12 +333,123 @@ export function layerRuns(loops, cfg) {
     runs.push(...fillRuns(loops, angle, c.density, c.stitchLength, c.pullComp));
     if (c.outline) runs.push(...runningRuns(loops, 2.5, false));
   } else if (c.type === "satin") {
-    if (c.underlay) runs.push(...fillRuns(loops, angle + 90, 1.6, 3, 0, 0.35));
-    runs.push(...satinRuns(loops, angle, c.density, c.pullComp));
+    // Angle automatique : satin qui suit la forme (colonnes courbes),
+    // sinon angle fixe choisi par l'utilisateur.
+    const column =
+      c.angle === null || c.angle === undefined || c.angle === ""
+        ? columnSatinRuns(loops, { density: c.density, pullComp: c.pullComp, underlay: c.underlay })
+        : null;
+    if (column) {
+      runs.push(...column);
+    } else {
+      if (c.underlay) runs.push(...fillRuns(loops, angle + 90, 1.6, 3, 0, 0.35));
+      runs.push(...satinRuns(loops, angle, c.density, c.pullComp));
+    }
   } else if (c.type === "running") {
     runs.push(...runningRuns(loops, c.stitchLength, c.triple));
+  } else if (c.type === "applique") {
+    // Les trois étapes de l'appliqué (voir appliqueSteps) ; ici : bordure seule.
+    runs.push(...borderSatinRuns(loops, { width: 2.5, density: Math.min(c.density, 0.4) }));
   }
   return runs.map((r) => dedupe(r, 0.3)).filter((r) => r.length > 1);
+}
+
+/**
+ * Appliqué en trois passages, séparés par un arrêt machine :
+ * 1. ligne de placement, 2. fixation du tissu posé, 3. bordure satin.
+ */
+export function appliqueSteps(loops, cfg) {
+  const c = { ...DEFAULT_LAYER, ...cfg };
+  return [
+    { step: "placement", runs: runningRuns(loops, 2.5, false) },
+    { step: "fixation", runs: runningRuns(loops, 2, false).map((r) => r.concat(r.slice(0, -1).reverse())) },
+    { step: "bordure", runs: borderSatinRuns(loops, { width: 2.5, density: Math.min(c.density, 0.4) }) },
+  ].map((s) => ({ ...s, runs: s.runs.map((r) => dedupe(r, 0.3)).filter((r) => r.length > 1) }));
+}
+
+/** Point le plus proche sur une boucle : [index du segment, t, distance]. */
+function nearestOnLoop(p, loop) {
+  let best = [0, 0, Infinity];
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i];
+    const b = loop[(i + 1) % loop.length];
+    const ex = b[0] - a[0];
+    const ey = b[1] - a[1];
+    const l2 = ex * ex + ey * ey || 1;
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / l2));
+    const d = Math.hypot(a[0] + ex * t - p[0], a[1] + ey * t - p[1]);
+    if (d < best[2]) best = [i, t, d];
+  }
+  return best;
+}
+
+/**
+ * Chemin de déplacement cousu à l'intérieur de la forme, pour éviter un
+ * saut + coupe de fil (précieux sur les machines sans coupe-fil).
+ * Ligne droite si elle reste dans la forme, sinon le long du contour.
+ * @returns {number[][]|null}
+ */
+export function travelPath(a, b, loops, maxLen = 60) {
+  if (!loops || !loops.length) return null;
+  const d = dist(a, b);
+  const straightInside = () => {
+    const n = Math.ceil(d / 0.4);
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      if (t * d < 0.5 || (1 - t) * d < 0.5) continue; // extrémités posées sur le bord
+      if (!insideLoops([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], loops)) return false;
+    }
+    return true;
+  };
+  if (straightInside()) return [b];
+  // Le long du contour commun aux deux points.
+  for (const loop of loops) {
+    const [ia, ta, da] = nearestOnLoop(a, loop);
+    const [ib, tb, db] = nearestOnLoop(b, loop);
+    if (da > 1 || db > 1) continue;
+    const n = loop.length;
+    const measure = (pts) => {
+      let len = 0;
+      let prev = a;
+      for (const q of pts) (len += dist(prev, q)), (prev = q);
+      return { pts, len };
+    };
+    const forward = () => {
+      if (ia === ib && tb >= ta) return measure([b]);
+      const pts = [];
+      for (let i = (ia + 1) % n, g = 0; g <= n; g++, i = (i + 1) % n) {
+        pts.push(loop[i]);
+        if (i === ib) break;
+      }
+      return measure(pts.concat([b]));
+    };
+    const backward = () => {
+      if (ia === ib && tb <= ta) return measure([b]);
+      const pts = [];
+      for (let i = ia, g = 0; g <= n; g++, i = (i - 1 + n) % n) {
+        pts.push(loop[i]);
+        if (i === (ib + 1) % n) break;
+      }
+      return measure(pts.concat([b]));
+    };
+    const f = forward();
+    const r = backward();
+    const best = f.len <= r.len ? f : r;
+    if (best.len <= maxLen) return best.pts;
+  }
+  return null;
+}
+
+/** Découpe un chemin en points de longueur <= step. */
+function splitPath(from, pts, step) {
+  const out = [];
+  let prev = from;
+  for (const q of pts) {
+    const n = Math.max(1, Math.ceil(dist(prev, q) / step));
+    for (let k = 1; k <= n; k++) out.push([prev[0] + ((q[0] - prev[0]) * k) / n, prev[1] + ((q[1] - prev[1]) * k) / n]);
+    prev = q;
+  }
+  return out;
 }
 
 /**
@@ -344,7 +458,7 @@ export function layerRuns(loops, cfg) {
  * @returns {{stitches:number[][], threads:{color:string,name:string}[], origin:number[], stats:object}}
  *   stitches = [x, y, commande] en 1/10 mm, centrés sur (0,0)
  */
-export function buildPattern(layers, { tieStitches = true, trimDistance = 3, maxDelta = 121 } = {}) {
+export function buildPattern(layers, { tieStitches = true, trimDistance = 3, maxDelta = 121, travel = true } = {}) {
   const cmds = [];
   let cur = null;
   const push = (p, c) => {
@@ -375,7 +489,19 @@ export function buildPattern(layers, { tieStitches = true, trimDistance = 3, max
     let count = 0;
     let length = 0;
     runs.forEach((run, ri) => {
-      const needJump = ri === 0 || !cur || dist(cur, run[0]) > trimDistance;
+      let needJump = ri === 0 || !cur || dist(cur, run[0]) > trimDistance;
+      if (needJump && ri > 0 && cur && travel && layer.loops) {
+        // Déplacement cousu à l'intérieur de la forme plutôt qu'une coupe.
+        const path = travelPath(cur, run[0], layer.loops);
+        if (path) {
+          for (const q of splitPath(cur, path, 2.5)) {
+            length += dist(cur, q);
+            push(q, STITCH);
+            count++;
+          }
+          needJump = false;
+        }
+      }
       if (needJump) {
         if (ri > 0) {
           tieOff();
@@ -475,4 +601,64 @@ export function patternBounds(stitches) {
   }
   if (b[0] === Infinity) return [0, 0, 0, 0];
   return b;
+}
+
+/**
+ * Motif recentré et mis à l'échelle (fichier de broderie importé).
+ * Les déplacements trop longs sont redécoupés pour rester lisibles partout.
+ */
+export function scalePattern(stitches, scale, maxDelta = 121) {
+  const [x0, y0, x1, y1] = patternBounds(stitches.filter((s) => s[2] === STITCH));
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const out = [];
+  let px = 0;
+  let py = 0;
+  for (const [x, y, c] of stitches) {
+    const tx = Math.round((x - cx) * scale);
+    const ty = Math.round((y - cy) * scale);
+    if (c === STITCH || c === JUMP) {
+      const n = Math.ceil(Math.max(Math.abs(tx - px), Math.abs(ty - py)) / maxDelta);
+      for (let k = 1; k < n; k++) out.push([Math.round(px + ((tx - px) * k) / n), Math.round(py + ((ty - py) * k) / n), c]);
+      out.push([tx, ty, c]);
+      px = tx;
+      py = ty;
+    } else out.push([px, py, c]);
+  }
+  if (!out.length || out[out.length - 1][2] !== END) out.push([px, py, END]);
+  return out;
+}
+
+/** Statistiques d'une liste de points déjà prête (fichier importé). */
+export function patternStats(stitches, threads) {
+  const layers = threads.map((t) => ({ color: t.color, name: t.name, stitches: 0, lengthMm: 0 }));
+  let ci = 0;
+  let prev = null;
+  let n = 0;
+  let trims = 0;
+  let jumps = 0;
+  let cc = 0;
+  for (const [x, y, c] of stitches) {
+    if (c === COLOR_CHANGE) (ci = Math.min(ci + 1, layers.length - 1)), cc++;
+    else if (c === TRIM) trims++;
+    else if (c === JUMP) jumps++;
+    else if (c === STITCH) {
+      n++;
+      layers[ci].stitches++;
+      if (prev && prev[2] === STITCH) layers[ci].lengthMm += Math.hypot(x - prev[0], y - prev[1]) / 10;
+    }
+    if (c === STITCH || c === JUMP) prev = [x, y, c];
+  }
+  const [x0, y0, x1, y1] = patternBounds(stitches.filter((s) => s[2] === STITCH));
+  return {
+    stitchCount: n,
+    jumps,
+    trims,
+    colorChanges: cc,
+    colors: threads.length,
+    widthMm: (x1 - x0) / 10,
+    heightMm: (y1 - y0) / 10,
+    minutes: n / 650 + cc * 0.5 + (trims * 4) / 60,
+    layers,
+  };
 }
