@@ -401,3 +401,6 @@ body:not(.has-image) .size-bar { display: none; }
 .size-bar input[type="range"] { flex: 1; min-width: 110px; }
 .size-bar output { font: 700 13px/1 var(--font); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .size-bar output.bad { color: var(--bad); }
+
+.busy-track { width: 70px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.25); overflow: hidden; }
+.busy-bar { display: block; height: 100%; width: 0; background: #fff; transition: width 0.15s; }

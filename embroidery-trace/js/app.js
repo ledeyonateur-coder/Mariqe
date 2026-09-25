@@ -2,12 +2,13 @@
 // simulation de broderie et export des fichiers machine. Tout tourne
 // localement dans le navigateur : l'image n'est envoyée nulle part.
 
-import { analyzeImage, vectorizeAll, stitchDesign, contentBounds, DEFAULT_SETTINGS, APPLIQUE_LABELS } from "./core/pipeline.js";
+import { contentBounds, DEFAULT_SETTINGS, APPLIQUE_LABELS } from "./core/pipeline.js";
 import { STITCH, JUMP, TRIM, COLOR_CHANGE, STITCH_TYPES, DEFAULT_LAYER, effectiveAngle, patternBounds, scalePattern, patternStats } from "./core/stitch.js";
 import { PEC_THREADS, JEF_THREADS, THREAD_CHARTS, nearestThreadIndex, nearestInChart, hexToRgb, rgbToHex } from "./core/threads.js";
 import { loopsToPath } from "./core/trace.js";
 import { FORMATS, writeFormat } from "./formats/writers.js";
 import { makeZip } from "./core/zip.js";
+import { engine } from "./engine.js";
 import { MACHINES, DEFAULT_MACHINE, machineFileName } from "./machines.js";
 import { openCropper } from "./crop.js";
 import { readEmbroidery } from "./formats/readers.js";
@@ -57,7 +58,9 @@ const state = {
   projectId: null,
   guideStep: 0,
   pendingWidthMm: null,
-  pendingTextOnly: false, // motif texte seul : l'intérieur des lettres reste vide
+  pendingTextOnly: false,
+  owned: [], // Mes bobines : couleurs de fil possédées
+  useOwned: false, // motif texte seul : l'intérieur des lettres reste vide
   hoop: MACHINES[DEFAULT_MACHINE].hoops[0],
   view: "stitch",
   tool: "pan",
@@ -144,6 +147,11 @@ function busy(on) {
   if (on) busyTimer = setTimeout(() => ($("#busy").hidden = false), 120);
   else $("#busy").hidden = true;
 }
+
+engine.setProgressHandler((label, v) => {
+  $("#busyLabel").textContent = `${label}… ${Math.round(v * 100)} %`;
+  $("#busyBar").style.width = `${Math.round(v * 100)}%`;
+});
 
 // ------------------------------------------------------------------ historique
 
@@ -235,6 +243,7 @@ $("#btnCrop").addEventListener("click", async () => {
 });
 
 function loadImage(img, name, { widthMm = null } = {}) {
+  imageGen++;
   state.pendingWidthMm = widthMm;
   leaveFileMode();
   let iw = img.naturalWidth || img.width || 800;
@@ -328,7 +337,8 @@ function openFilePattern(p, name, widthMm = null) {
   document.body.classList.add("has-image", "file-mode");
   $("#emptyState").hidden = true;
   $("#btnCrop").disabled = true;
-  stitchNow();
+  imageGen++;
+  stitchFileNow();
   refreshUI();
   setView("stitch");
   fitView();
@@ -367,120 +377,168 @@ function syncPhotoUI() {
 
 // ------------------------------------------------------------------ pipeline
 
-function withBusy(fn) {
+/** Remplace les couleurs par la bobine possédée la plus proche (Mes bobines). */
+function applyOwnedThreads(layers) {
+  if (!state.useOwned || !state.owned.length) return;
+  for (const L of layers) {
+    if (L.type === "none") continue;
+    const c = hexToRgb(L.color);
+    let best = state.owned[0];
+    let bd = Infinity;
+    for (const hex of state.owned) {
+      const o = hexToRgb(hex);
+      const d = 2 * (c[0] - o[0]) ** 2 + 4 * (c[1] - o[1]) ** 2 + 3 * (c[2] - o[2]) ** 2;
+      if (d < bd) (bd = d), (best = hex);
+    }
+    L.color = best;
+    L.name = threadLabel(best);
+  }
+}
+
+// File de calcul : les demandes rapprochées sont fusionnées et seul le
+// dernier état est recalculé. Niveaux : 1 points, 2 vecteurs + points,
+// 3 analyse des couleurs + vecteurs + points.
+const LEVEL = { stitch: 1, vectorize: 2, analyze: 3 };
+let pendingLevel = 0;
+let pendingFit = false;
+let computing = false;
+let imageGen = 0; // change à chaque nouvelle image : ignore les résultats périmés
+
+function requestCompute(kind, { fit = false } = {}) {
+  pendingLevel = Math.max(pendingLevel, LEVEL[kind]);
+  pendingFit ||= fit;
+  if (!computing) runQueue();
+}
+
+async function runQueue() {
+  computing = true;
   busy(true);
-  setTimeout(() => {
+  while (pendingLevel) {
+    const level = pendingLevel;
+    const fit = pendingFit;
+    pendingLevel = 0;
+    pendingFit = false;
+    const gen = imageGen;
     try {
-      fn();
+      if (level >= 3 && !(await doAnalyze(gen, fit))) continue;
+      if (level >= 2 && !(await doVectorize(gen))) continue;
+      if (!(await doStitch(gen))) continue;
+      refreshUI();
+      if (fit) fitView();
     } catch (e) {
       console.error(e);
       toast("Erreur de calcul : " + e.message, "bad");
-    } finally {
-      busy(false);
     }
-  }, 16);
+  }
+  busy(false);
+  computing = false;
 }
 
-function runAnalyze({ fitSize = false } = {}) {
-  if (!state.rgba) return;
-  withBusy(() => {
-    const { labels, layers, background } = analyzeImage(state.rgba, state.w, state.h, state.settings);
-    state.labels = labels;
-    const fab = FABRICS[state.fabricType] || FABRICS.coton;
-    for (const L of layers) {
-      L.density = state.spacing;
-      L.stitchLength = state.stitchLength;
-      L.pullComp = fab.pullComp;
-      L.underlay = fab.underlay;
-      L.name = threadLabel(L.color) + (L.name.endsWith("(intérieur)") ? " (intérieur)" : "");
-    }
-    if (state.pendingTextOnly) {
-      for (const L of layers) if (L.name.endsWith("(intérieur)")) L.type = "none";
-      state.pendingTextOnly = false;
-    }
-    state.layers = layers;
-    state.background = background;
-    state.selected = (layers.find((L) => L.type !== "none") || layers[0] || {}).id ?? null;
-    state.expanded.clear();
-    if (fitSize) {
-      state.widthMm = state.pendingWidthMm || 100;
-      state.pendingWidthMm = null;
-      const fit = hoopFitWidth();
-      if (fit && fit < state.widthMm) state.widthMm = Math.floor(fit);
-    }
-    vectorizeNow();
-    stitchNow();
-    refreshUI();
-    if (fitSize) fitView();
-  });
+async function doAnalyze(gen, fitSize) {
+  if (!state.rgba) return false;
+  const { labels, layers, background } = await engine.analyze(state.rgba, state.w, state.h, state.settings);
+  if (gen !== imageGen) return false;
+  state.labels = labels;
+  const fab = FABRICS[state.fabricType] || FABRICS.coton;
+  for (const L of layers) {
+    L.density = state.spacing;
+    L.stitchLength = state.stitchLength;
+    L.pullComp = fab.pullComp;
+    L.underlay = fab.underlay;
+    L.name = threadLabel(L.color) + (L.name.endsWith("(intérieur)") ? " (intérieur)" : "");
+  }
+  if (state.pendingTextOnly) {
+    for (const L of layers) if (L.name.endsWith("(intérieur)")) L.type = "none";
+    state.pendingTextOnly = false;
+  }
+  applyOwnedThreads(layers);
+  state.layers = layers;
+  state.background = background;
+  state.selected = (layers.find((L) => L.type !== "none") || layers[0] || {}).id ?? null;
+  state.expanded.clear();
+  if (fitSize) {
+    state.widthMm = state.pendingWidthMm || 100;
+    state.pendingWidthMm = null;
+    const fit = hoopFitWidth();
+    if (fit && fit < state.widthMm) state.widthMm = Math.floor(fit);
+  }
+  return true;
 }
 
-function vectorizeNow() {
-  state.vectors = vectorizeAll(state.labels, state.w, state.h, state.layers, state.settings);
+async function doVectorize(gen) {
+  if (!state.labels || state.mode === "file") return true;
+  const vectors = await engine.vectorize(state.labels, state.w, state.h, state.layers, state.settings);
+  if (gen !== imageGen) return false;
+  state.vectors = vectors;
   state.paths = new Map();
   for (const [id, loops] of state.vectors) state.paths.set(id, new Path2D(loopsToPath(loops, 1, 2)));
   updateRaster();
+  return true;
 }
 
-function stitchNow() {
+async function doStitch(gen) {
   const { mmPerPx } = geometry();
-  state.patternScale = mmPerPx;
   if (state.mode === "file") {
-    // Fichier importé : simple mise à l'échelle des points existants.
-    const stitches = scalePattern(state.filePattern.stitches, 10 * mmPerPx);
-    const threads = state.layers.map((L) => ({ color: L.color, name: L.name }));
-    state.pattern = {
-      stitches,
-      threads,
-      origin: [(state.w / 2) * mmPerPx, (state.h / 2) * mmPerPx],
-      stats: patternStats(stitches, threads),
-      layerIds: state.layers.map((L) => L.id),
-      steps: [],
-    };
-    state.progress = stitches.length;
-    stitchCache = null;
-    return;
+    stitchFileNow();
+    return true;
   }
-  state.pattern = stitchDesign(state.layers, state.vectors, mmPerPx, {
+  if (!state.labels) return false;
+  const pattern = await engine.stitch(state.layers, state.vectors, mmPerPx, {
     style: state.style,
     outlineColor: state.outlineColor,
     outlineTriple: state.outlineTriple,
     outlineLength: state.outlineLength,
   });
-  state.progress = state.pattern.stitches.length;
+  if (gen !== imageGen) return false;
+  state.patternScale = mmPerPx;
+  state.pattern = pattern;
+  state.progress = pattern.stitches.length;
   stitchCache = null;
+  return true;
+}
+
+/** Fichier importé : simple mise à l'échelle des points existants (rapide). */
+function stitchFileNow() {
+  const { mmPerPx } = geometry();
+  state.patternScale = mmPerPx;
+  const stitches = scalePattern(state.filePattern.stitches, 10 * mmPerPx);
+  const threads = state.layers.map((L) => ({ color: L.color, name: L.name }));
+  state.pattern = {
+    stitches,
+    threads,
+    origin: [(state.w / 2) * mmPerPx, (state.h / 2) * mmPerPx],
+    stats: patternStats(stitches, threads),
+    layerIds: state.layers.map((L) => L.id),
+    steps: [],
+  };
+  state.progress = stitches.length;
+  stitchCache = null;
+}
+
+function runAnalyze({ fitSize = false } = {}) {
+  requestCompute("analyze", { fit: fitSize });
 }
 
 let stitchTimer = null;
 function scheduleStitch(delay = 120) {
   clearTimeout(stitchTimer);
-  stitchTimer = setTimeout(() => {
-    withBusy(() => {
-      stitchNow();
-      refreshUI();
-    });
-  }, delay);
+  stitchTimer = setTimeout(() => requestCompute("stitch"), delay);
 }
 
 function scheduleVectorize(delay = 60) {
   clearTimeout(stitchTimer);
-  stitchTimer = setTimeout(() => {
-    withBusy(() => {
-      vectorizeNow();
-      stitchNow();
-      refreshUI();
-    });
-  }, delay);
+  stitchTimer = setTimeout(() => requestCompute("vectorize"), delay);
 }
 
 /** Recalcule tout depuis la carte de couleurs courante (après annulation, fusion…). */
 function refreshAll() {
   if (!state.labels) return;
-  withBusy(() => {
-    vectorizeNow();
-    stitchNow();
+  if (state.mode === "file") {
+    stitchFileNow();
     refreshUI();
-  });
+    return;
+  }
+  requestCompute("vectorize");
 }
 
 // ------------------------------------------------------------------ géométrie
@@ -1787,13 +1845,8 @@ $("#textAdd").addEventListener("click", async () => {
   const before = mmPerPx;
   state.selected = id;
   $("#textDialog").close();
-  withBusy(() => {
-    vectorizeNow();
-    state.widthMm = geometry().box.w * before;
-    stitchNow();
-    refreshUI();
-    fitView();
-  });
+  state.widthMm = geometry().box.w * before;
+  requestCompute("vectorize", { fit: true });
 });
 
 /** Agrandit l'image de travail (marges blanches) en conservant les calques. */

@@ -82,12 +82,13 @@ function splitEnclosed(labels, w, h, value, into) {
 }
 
 /** Étape 2 : contours vectoriels de chaque calque (en pixels). */
-export function vectorizeAll(labels, w, h, layers, settings = {}) {
+export function vectorizeAll(labels, w, h, layers, settings = {}, onProgress = null) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const out = new Map();
-  for (const L of layers) {
+  layers.forEach((L, i) => {
     out.set(L.id, vectorizeLayer(labels, w, h, L.id, { smoothing: s.curve, simplify: s.detail }));
-  }
+    onProgress?.((i + 1) / layers.length);
+  });
   return out;
 }
 
@@ -100,11 +101,14 @@ export function vectorizeAll(labels, w, h, layers, settings = {}) {
  *                       couleur par calque) ou "outline1" (contours d'un seul fil)
  */
 export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
-  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, outlineLength = 2.5, ...buildOptions } = options;
+  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, outlineLength = 2.5, onProgress = null, ...buildOptions } = options;
+  const visible = layers.filter((L) => L.visible && L.type !== "none");
+  let done = 0;
   const outline = style === "outline" || style === "outline1";
   let prepared = layers
     .filter((L) => L.visible && L.type !== "none")
     .map((L) => {
+      onProgress?.(done++ / Math.max(1, visible.length));
       const cfg = outline ? { ...L, type: "running", triple: outlineTriple, stitchLength: outlineLength } : L;
       const loops = (vectors.get(L.id) || []).map((loop) => loop.map(([x, y]) => [x * mmPerPx, y * mmPerPx]));
       if (cfg.type === "applique" && !outline) {
