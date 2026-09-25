@@ -17,6 +17,7 @@ import { adjustPixels, sketchPixels } from "./photo.js";
 import { checkPattern } from "./core/checks.js";
 import { newSyncCode, normalizeCode, pushProject, pullProjects, galleryGet, galleryShare, b64, unb64 } from "./cloud.js";
 import { readDST } from "./formats/readers.js";
+import { startI18n, switchLang, lang, t } from "./i18n.js";
 import { FONTS, drawText, measureText } from "./text.js";
 import { saveProject, listProjects, getProject, deleteProject } from "./projects.js";
 
@@ -825,8 +826,8 @@ function drawCompare(dpr) {
   ctx.fillText("‹ ›", x, H / 2 + 1);
   ctx.font = "600 12px Inter, sans-serif";
   ctx.fillStyle = "rgba(0,0,0,.6)";
-  ctx.fillText("Image", x / 2, 16);
-  ctx.fillText("Broderie", x + (W - x) / 2, 16);
+  ctx.fillText(t("Image"), x / 2, 16);
+  ctx.fillText(t("Broderie"), x + (W - x) / 2, 16);
   ctx.restore();
 }
 
@@ -866,7 +867,7 @@ function drawHoop() {
   ctx.setLineDash([]);
   ctx.fillStyle = ctx.strokeStyle;
   ctx.font = `${12 / view.s}px Inter, sans-serif`;
-  ctx.fillText(`Cadre ${hoop[0]} × ${hoop[1]} mm`, cx - w / 2 + 8 / view.s, cy - h / 2 - 6 / view.s);
+  ctx.fillText(t(`Cadre ${hoop[0]} × ${hoop[1]} mm`), cx - w / 2 + 8 / view.s, cy - h / 2 - 6 / view.s);
   // repères de centre
   ctx.beginPath();
   ctx.moveTo(cx - 10 / view.s, cy);
@@ -2956,6 +2957,10 @@ try {
 } catch {}
 syncSettingsUI();
 setView("stitch");
+startI18n();
+$("#btnLang").textContent = lang === "en" ? "FR" : "EN";
+$("#btnLang").title = lang === "en" ? "Version française" : "English version";
+$("#btnLang").addEventListener("click", switchLang);
 let savedTheme = null;
 let savedMode = null;
 let tourDone = false;

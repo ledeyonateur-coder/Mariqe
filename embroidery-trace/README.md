@@ -24,9 +24,38 @@ Le site est une PWA (`manifest.webmanifest`, `sw.js`) : une fois en ligne en
 HTTPS, « Installer l'application » (ordinateur) ou « Ajouter à l'écran
 d'accueil » (téléphone) l'installe comme une app, utilisable hors connexion.
 
+## Fonctions en ligne (facultatives)
+
+La **synchronisation entre appareils** et la **galerie communautaire** passent
+par deux fonctions Vercel (`api/sync.js`, `api/gallery.js`) et une base
+**Upstash Redis** (offre gratuite suffisante). Sans base configurée, le reste du
+site fonctionne et ces deux fonctions affichent « non configuré ».
+
+Pour les activer :
+1. Vercel → projet → **Storage** (ou Marketplace) → **Upstash / Redis** → créer
+   une base et la **connecter au projet** : Vercel ajoute les variables
+   `KV_REST_API_URL` et `KV_REST_API_TOKEN` (ou `UPSTASH_REDIS_REST_URL` /
+   `UPSTASH_REDIS_REST_TOKEN` si vous les copiez depuis upstash.com).
+2. Facultatif : `GALLERY_ADMIN_KEY` = un mot de passe long, pour supprimer
+   n'importe quel motif de la galerie (modération) avec l'API DELETE.
+3. Redéployer.
+
+Les projets synchronisés sont compressés et **chiffrés dans le navigateur**
+(AES-GCM, clé dérivée du code personnel) : le serveur ne voit ni le code ni le
+contenu. La galerie masque un motif après 3 signalements.
+
+Statistiques : activer **Web Analytics** dans l'onglet Analytics du projet
+Vercel (le script `/_vercel/insights/script.js` est déjà dans les pages).
+
+Adresse du site : les balises de partage, `sitemap.xml` et `robots.txt`
+utilisent `https://filtracebroderie.vercel.app`. Si l'adresse finale est
+différente, remplacez-la dans ces fichiers.
+
 ## Pages
 
-- `index.html` — page de présentation (étapes, fonctions, types de points, formats, FAQ).
+- `index.html` — page de présentation (étapes, fonctions, galerie de rendus, formats, FAQ) ; `en/index.html` en anglais.
+- `communaute.html` — galerie de motifs partagés par la communauté.
+- `aide/` — guides (Chicago 7, image, formats, tissus, points) ; `mentions-legales.html` (à compléter : éditeur et contact), `confidentialite.html`.
 - `app.html` — l'éditeur.
 
 ## Fonctions de l'éditeur
@@ -50,6 +79,9 @@ d'accueil » (téléphone) l'installe comme une app, utilisable hors connexion.
 | Projet | **Mes projets** : sauvegarde dans le navigateur (IndexedDB) avec vignette ; téléchargement / import `.filtrace.json` |
 | Guide | ordre des fils étape par étape, fils à couper par couleur, consignes d'appliqué |
 | Nuanciers | Brother, Janome, Husqvarna Viking (Madeira / Gunold non inclus : pas de table de couleurs fiable) |
+| Expérience | **mode simple** (3 étapes) / avancé, **visite guidée**, **9 modèles**, **mode sombre**, **avant / après**, curseurs appliqués en direct, calculs dans un **Worker** avec barre de progression, annuler / rétablir sur tous les réglages |
+| Contrôle | **alertes** (points trop longs, zones trop denses, texte trop petit, hors cadre), **Mes bobines** (n'utiliser que ses fils), style **dessin au trait** pour les photos, outil **Déplacer**, textes modifiables |
+| Langues | français et **anglais** (bouton EN/FR, `?lang=en`) |
 | Téléphone | onglets Aperçu / Réglages / Calques / Fichier, **zoom à deux doigts** |
 
 Raccourcis : `1`–`4` vues, `H` main, `B` pinceau, `E` gomme, `G` pot, `I` pipette,
@@ -61,7 +93,7 @@ Les modules ES demandent un petit serveur HTTP (pas de `file://`) :
 
 ```bash
 cd embroidery-trace
-python3 -m http.server 8080   # puis http://localhost:8080
+node test/dev-server.mjs 8080   # puis http://localhost:8080 (avec /api et une base en mémoire)
 ```
 
 ## Mise en ligne
