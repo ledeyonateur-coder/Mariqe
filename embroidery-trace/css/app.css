@@ -391,3 +391,13 @@ body.file-mode [data-hide-file], body.file-mode #tools, body.file-mode #viewTabs
   body[data-mtab="apercu"] .stage { height: calc(100dvh - 190px); }
   .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 }
+
+.size-bar { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 8px 12px; background: var(--surface); border-top: 1px solid var(--line); }
+body:not(.has-image) .size-bar { display: none; }
+.size-label { font-weight: 700; font-size: 13px; }
+.size-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.size-chips button { border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 5px 10px; font: 600 12px/1 var(--font); cursor: pointer; color: var(--ink); }
+.size-chips button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.size-bar input[type="range"] { flex: 1; min-width: 110px; }
+.size-bar output { font: 700 13px/1 var(--font); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.size-bar output.bad { color: var(--bad); }

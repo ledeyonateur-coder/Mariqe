@@ -45,12 +45,12 @@ d'accueil » (téléphone) l'installe comme une app, utilisable hors connexion.
 | Photo | luminosité, contraste, saturation ; baguette pour retirer une zone (fond) d'un clic |
 | Espacement | **espacement entre les fils** et longueur des points pour tout le motif (puis réglables calque par calque) ; longueur des points du contour en mode contours |
 | Fichier | type de fichier au choix (EXP, PES, JEF, DST, VP3), format recommandé selon la machine |
-| Taille | largeur / hauteur en mm, cadres 4×4 à 9,5×14, alerte si le motif dépasse, bouton « Ajuster au cadre » |
+| Taille | **barre de taille sous l'aperçu** (5 / 7 / 10 / 15 cm, max du cadre, curseur) ; largeur / hauteur en mm, cadres 4×4 à 9,5×14, alerte si le motif dépasse, bouton « Ajuster au cadre » |
 | Export | **DST, PES, JEF, EXP, VP3**, SVG en calques (Inkscape / Ink/Stitch), PNG d'aperçu, fiche couleurs imprimable (fils Brother + Janome, points, métrage), ZIP de tout |
 | Projet | **Mes projets** : sauvegarde dans le navigateur (IndexedDB) avec vignette ; téléchargement / import `.filtrace.json` |
 | Guide | ordre des fils étape par étape, fils à couper par couleur, consignes d'appliqué |
 | Nuanciers | Brother, Janome, Husqvarna Viking (Madeira / Gunold non inclus : pas de table de couleurs fiable) |
-| Téléphone | onglets Aperçu / Réglages / Calques / Fichier |
+| Téléphone | onglets Aperçu / Réglages / Calques / Fichier, **zoom à deux doigts** |
 
 Raccourcis : `1`–`4` vues, `H` main, `B` pinceau, `E` gomme, `G` pot, `I` pipette,
 `+` / `-` / `0` zoom, espace + glisser pour se déplacer.

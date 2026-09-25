@@ -894,9 +894,47 @@ function setView(v) {
 let pan = null;
 let spaceDown = false;
 
+// Zoom à deux doigts : on suit tous les doigts posés sur l'aperçu.
+const touches = new Map();
+let pinch = null;
+
+function pinchInfo() {
+  const [a, b] = [...touches.values()];
+  const r = canvas.getBoundingClientRect();
+  return { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, mx: (a[0] + b[0]) / 2 - r.left, my: (a[1] + b[1]) / 2 - r.top };
+}
+
+function startPinch() {
+  // Un trait de pinceau commencé avec le premier doigt est annulé.
+  if (state.stroke) {
+    const snap = state.undo.pop();
+    if (snap) state.labels = snap.labels;
+    state.stroke = null;
+    updateRaster();
+    updateHistoryButtons();
+  }
+  pan = null;
+  const i = pinchInfo();
+  pinch = { ...i, s: view.s, tx: view.tx, ty: view.ty };
+}
+
+function movePinch() {
+  const i = pinchInfo();
+  const ns = Math.min(40, Math.max(0.05, (pinch.s * i.d) / pinch.d));
+  const f = ns / pinch.s;
+  // Le point sous les doigts reste sous les doigts (zoom + déplacement).
+  view.tx = i.mx - (pinch.mx - pinch.tx) * f;
+  view.ty = i.my - (pinch.my - pinch.ty) * f;
+  view.s = ns;
+  render();
+}
+
 canvas.addEventListener("pointerdown", (e) => {
   if (!state.labels) return;
   canvas.setPointerCapture(e.pointerId);
+  touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (touches.size === 2) return startPinch();
+  if (touches.size > 2) return;
   if (state.mode === "file") {
     pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
     return;
@@ -943,6 +981,11 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 
 canvas.addEventListener("pointermove", (e) => {
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch) {
+    if (touches.size >= 2) movePinch();
+    return;
+  }
   if (pan) {
     view.tx = pan.tx + e.clientX - pan.x;
     view.ty = pan.ty + e.clientY - pan.y;
@@ -961,7 +1004,13 @@ canvas.addEventListener("pointermove", (e) => {
   render();
 });
 
-function endPointer() {
+function endPointer(e) {
+  if (e) touches.delete(e.pointerId);
+  if (pinch) {
+    if (touches.size < 2) pinch = null;
+    pan = null;
+    return;
+  }
   if (pan) {
     pan = null;
     canvas.classList.remove("grabbing");
@@ -1212,7 +1261,58 @@ $("#btnAddLayer").addEventListener("click", () => {
 
 // ------------------------------------------------------------------ interface
 
+// ------------------------------------------------------------------ taille rapide
+
+/** Règle la taille par le côté le plus long du motif (mm). */
+function setLongSide(mm) {
+  const { box } = geometry();
+  state.widthMm = box.w >= box.h ? mm : (mm * box.w) / box.h;
+  refreshUI();
+  scheduleStitch(0);
+  if (state.mode === "file") setTimeout(fitView, 150);
+}
+
+function syncSizeBar() {
+  if (!state.labels) return;
+  const { heightMm } = geometry();
+  const long = Math.max(state.widthMm, heightMm);
+  const hoop = hoopSize();
+  const max = hoop ? Math.max(...hoop) : 400;
+  $("#sizeRange").max = Math.max(max, Math.ceil(long));
+  $("#sizeRange").value = Math.round(long);
+  $("#sizeOut").textContent = `${fmt(state.widthMm)} × ${fmt(heightMm)} mm`;
+  $("#sizeOut").classList.toggle("bad", !fitsHoop());
+  const fit = hoopFitWidth();
+  for (const b of $$("#sizeChips [data-size]")) {
+    const v = b.dataset.size;
+    b.classList.toggle("active", v !== "max" && Math.abs(Number(v) - long) < 0.6);
+    if (v === "max") b.disabled = !fit;
+  }
+}
+
+$("#sizeChips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-size]");
+  if (!b || !state.labels) return;
+  if (b.dataset.size === "max") {
+    const fit = hoopFitWidth();
+    if (!fit) return;
+    state.widthMm = Math.floor(fit);
+    refreshUI();
+    scheduleStitch(0);
+    if (state.mode === "file") setTimeout(fitView, 150);
+  } else setLongSide(Number(b.dataset.size));
+});
+$("#sizeRange").addEventListener("input", (e) => {
+  // Aperçu immédiat des dimensions pendant le glissement.
+  const { box } = geometry();
+  const long = Number(e.target.value);
+  const w = box.w >= box.h ? long : (long * box.w) / box.h;
+  $("#sizeOut").textContent = `${fmt(w)} × ${fmt((w * box.h) / box.w)} mm`;
+});
+$("#sizeRange").addEventListener("change", (e) => setLongSide(Number(e.target.value)));
+
 function refreshUI() {
+  syncSizeBar();
   const { heightMm } = geometry();
   $("#widthMm").value = Math.round(state.widthMm);
   $("#heightMm").value = Math.round(heightMm);

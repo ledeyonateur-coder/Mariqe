@@ -220,6 +220,18 @@
         </div>
         <div class="busy" id="busy" hidden><span class="spinner"></span> Calcul…</div>
       </div>
+      <div class="size-bar" id="sizeBar">
+        <span class="size-label">Taille</span>
+        <div class="size-chips" id="sizeChips" role="group" aria-label="Taille rapide (côté le plus long)">
+          <button type="button" data-size="50">5 cm</button>
+          <button type="button" data-size="70">7 cm</button>
+          <button type="button" data-size="100">10 cm</button>
+          <button type="button" data-size="150">15 cm</button>
+          <button type="button" data-size="max">Max cadre</button>
+        </div>
+        <input type="range" id="sizeRange" min="15" max="300" step="1" value="100" aria-label="Taille du côté le plus long (mm)" />
+        <output id="sizeOut">—</output>
+      </div>
       <div class="stage-foot" id="stitchBar">
         <button class="btn small" id="btnPlay" title="Simuler la broderie">▶ Simuler</button>
         <input type="range" id="progress" min="0" max="0" value="0" aria-label="Avancement de la simulation" />
