@@ -457,3 +457,16 @@ body:not(.simple) [data-simple-only] { display: none !important; }
 .share-box .btn { margin-top: 10px; }
 .share-box .check { margin-top: 4px; }
 #shareResult code { user-select: all; }
+
+@media (max-width: 860px) {
+  /* Barre du haut sur une seule ligne, défilable, sans doublon avec les onglets. */
+  .topbar { flex-wrap: nowrap; gap: 10px; }
+  .topbar .brand span { display: none; }
+  .topbar-actions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; margin-left: 0; padding-bottom: 2px; }
+  .topbar-actions::-webkit-scrollbar { display: none; }
+  .topbar-actions .btn { flex: none; padding: 8px 12px; }
+  #btnExport { display: none; }
+  #btnQuick { order: -1; }
+  .topbar .brand { flex: none; }
+  .topbar .brand img { width: 28px; height: 28px; }
+}
