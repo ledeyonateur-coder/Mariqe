@@ -13,7 +13,8 @@ import { MACHINES, DEFAULT_MACHINE, machineFileName } from "./machines.js";
 import { openCropper } from "./crop.js";
 import { readEmbroidery } from "./formats/readers.js";
 import { FABRICS } from "./fabrics.js";
-import { adjustPixels } from "./photo.js";
+import { adjustPixels, sketchPixels } from "./photo.js";
+import { checkPattern } from "./core/checks.js";
 import { FONTS, drawText, measureText } from "./text.js";
 import { saveProject, listProjects, getProject, deleteProject } from "./projects.js";
 
@@ -59,6 +60,9 @@ const state = {
   guideStep: 0,
   pendingWidthMm: null,
   pendingTextOnly: false,
+  compare: false,
+  focus: null, // point mis en évidence par une alerte
+  compareX: 0.5, // position du séparateur avant / après (0..1)
   owned: [], // Mes bobines : couleurs de fil possédées
   useOwned: false, // motif texte seul : l'intérieur des lettres reste vide
   hoop: MACHINES[DEFAULT_MACHINE].hoops[0],
@@ -155,13 +159,23 @@ engine.setProgressHandler((label, v) => {
 
 // ------------------------------------------------------------------ historique
 
+// Réglages suivis par Annuler / Rétablir (taille, tissu, machine, style…).
+const SNAP_KEYS = ["widthMm", "spacing", "stitchLength", "fabricType", "machine", "hoop", "format", "style", "outlineColor", "outlineTriple", "outlineLength", "photo", "settings"];
+
 function snapshot() {
-  return {
+  const snap = {
     labels: state.labels ? new Int16Array(state.labels) : null,
     layers: clone(state.layers),
     background: state.background,
     selected: state.selected,
+    // Références (jamais modifiées sur place) : l'image peut avoir été agrandie.
+    w: state.w,
+    h: state.h,
+    source: state.source,
+    rgbaBase: state.rgbaBase,
   };
+  for (const k of SNAP_KEYS) snap[k] = clone(state[k]);
+  return snap;
 }
 
 function pushHistory() {
@@ -173,10 +187,20 @@ function pushHistory() {
 }
 
 function restore(snap) {
-  state.labels = snap.labels;
-  state.layers = snap.layers;
-  state.background = snap.background;
-  state.selected = snap.selected;
+  const photoChanged = JSON.stringify(snap.photo) !== JSON.stringify(state.photo) || snap.rgbaBase !== state.rgbaBase;
+  Object.assign(state, {
+    labels: snap.labels,
+    layers: snap.layers,
+    background: snap.background,
+    selected: snap.selected,
+    w: snap.w,
+    h: snap.h,
+    source: snap.source,
+    rgbaBase: snap.rgbaBase,
+  });
+  for (const k of SNAP_KEYS) state[k] = snap[k];
+  if (photoChanged && state.rgbaBase) state.rgba = adjustPixels(state.rgbaBase, state.photo);
+  syncSettingsUI();
   refreshAll();
 }
 
@@ -192,6 +216,28 @@ function redo() {
   state.undo.push(snapshot());
   restore(state.redo.pop());
   updateHistoryButtons();
+}
+
+/** Une seule entrée d'historique par glissement de curseur. */
+function historyOnce(el) {
+  if (el._hist) return;
+  el._hist = true;
+  pushHistory();
+}
+document.addEventListener("change", (e) => (e.target._hist = false), true);
+
+/** Applique un curseur pendant qu'on le glisse (aperçu en direct). */
+function liveRange(el, apply, delay = 300) {
+  let t = null;
+  el.addEventListener("input", () => {
+    historyOnce(el);
+    clearTimeout(t);
+    t = setTimeout(() => apply(el.value), delay);
+  });
+  el.addEventListener("change", () => {
+    clearTimeout(t);
+    apply(el.value);
+  });
 }
 
 function updateHistoryButtons() {
@@ -353,12 +399,18 @@ $("#embInput").addEventListener("change", (e) => {
 
 for (const k of ["brightness", "contrast", "saturation"]) {
   $("#" + k).addEventListener("input", (e) => ($("#" + k + "Out").textContent = e.target.value));
-  $("#" + k).addEventListener("change", (e) => {
-    state.photo[k] = Number(e.target.value);
-    applyPhoto();
-  });
+  liveRange(
+    $("#" + k),
+    (v) => {
+      if (state.photo[k] === Number(v)) return;
+      state.photo = { ...state.photo, [k]: Number(v) };
+      applyPhoto();
+    },
+    450,
+  );
 }
 $("#btnResetPhoto").addEventListener("click", () => {
+  pushHistory();
   state.photo = { brightness: 0, contrast: 0, saturation: 100 };
   syncPhotoUI();
   applyPhoto();
@@ -391,7 +443,7 @@ function applyOwnedThreads(layers) {
       if (d < bd) (bd = d), (best = hex);
     }
     L.color = best;
-    L.name = threadLabel(best);
+    L.name = threadLabel(best) + (L.name.endsWith("(intérieur)") ? " (intérieur)" : L.text ? " (texte)" : "");
   }
 }
 
@@ -436,7 +488,12 @@ async function runQueue() {
 
 async function doAnalyze(gen, fitSize) {
   if (!state.rgba) return false;
-  const { labels, layers, background } = await engine.analyze(state.rgba, state.w, state.h, state.settings);
+  // Dessin au trait : la photo devient des traits noirs sur blanc avant l'analyse.
+  const sketch = state.style === "sketch";
+  const pixels = sketch ? sketchPixels(state.rgba, state.w, state.h, 5) : state.rgba;
+  const settings = sketch ? { ...state.settings, colors: 2, removeBackground: true, cleanup: Math.max(12, state.settings.cleanup) } : state.settings;
+  const textLayers = state.layers.filter((L) => L.text);
+  const { labels, layers, background } = await engine.analyze(pixels, state.w, state.h, settings);
   if (gen !== imageGen) return false;
   state.labels = labels;
   const fab = FABRICS[state.fabricType] || FABRICS.coton;
@@ -451,7 +508,14 @@ async function doAnalyze(gen, fitSize) {
     for (const L of layers) if (L.name.endsWith("(intérieur)")) L.type = "none";
     state.pendingTextOnly = false;
   }
+  if (sketch) for (const L of layers) if (L.name.endsWith("(intérieur)")) L.type = "none";
   applyOwnedThreads(layers);
+  // Les textes ajoutés sont redessinés par-dessus la nouvelle analyse.
+  for (const T of textLayers) {
+    T.id = Math.max(-1, ...layers.map((L) => L.id)) + 1;
+    await paintTextLayer(T, labels);
+    layers.push(T);
+  }
   state.layers = layers;
   state.background = background;
   state.selected = (layers.find((L) => L.type !== "none") || layers[0] || {}).id ?? null;
@@ -484,7 +548,7 @@ async function doStitch(gen) {
   }
   if (!state.labels) return false;
   const pattern = await engine.stitch(state.layers, state.vectors, mmPerPx, {
-    style: state.style,
+    style: state.style === "sketch" ? "fill" : state.style,
     outlineColor: state.outlineColor,
     outlineTriple: state.outlineTriple,
     outlineLength: state.outlineLength,
@@ -706,6 +770,14 @@ function draw() {
   } else if (v === "stitch") {
     drawHoop();
     drawStitches();
+    if (state.compare && state.mode === "image") drawCompare(dpr);
+    if (state.focus) {
+      ctx.beginPath();
+      ctx.arc(state.focus[0], state.focus[1], 14 / view.s, 0, Math.PI * 2);
+      ctx.lineWidth = 3 / view.s;
+      ctx.strokeStyle = "#f3a712";
+      ctx.stroke();
+    }
   }
   if (state.cursor && ["brush", "eraser"].includes(state.tool) && v !== "stitch" && v !== "original") {
     ctx.beginPath();
@@ -717,6 +789,42 @@ function draw() {
     ctx.strokeStyle = "#fff";
     ctx.stroke();
   }
+}
+
+/** Image d'origine à gauche du séparateur, broderie à droite. */
+function drawCompare(dpr) {
+  const W = canvas.width / dpr;
+  const H = canvas.height / dpr;
+  const x = W * state.compareX;
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.beginPath();
+  ctx.rect(0, 0, x, H);
+  ctx.clip();
+  ctx.fillStyle = state.fabric;
+  ctx.fillRect(0, 0, x, H);
+  ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.tx, dpr * view.ty);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(state.source, 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x - 1.5, 0, 3, H);
+  ctx.beginPath();
+  ctx.arc(x, H / 2, 16, 0, Math.PI * 2);
+  ctx.fillStyle = "#1d1a16";
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 13px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("‹ ›", x, H / 2 + 1);
+  ctx.font = "600 12px Inter, sans-serif";
+  ctx.fillStyle = "rgba(0,0,0,.6)";
+  ctx.fillText("Image", x / 2, 16);
+  ctx.fillText("Broderie", x + (W - x) / 2, 16);
+  ctx.restore();
 }
 
 function drawSelectedOutline() {
@@ -993,6 +1101,13 @@ canvas.addEventListener("pointerdown", (e) => {
   touches.set(e.pointerId, [e.clientX, e.clientY]);
   if (touches.size === 2) return startPinch();
   if (touches.size > 2) return;
+  if (state.compare && state.view === "stitch") {
+    const r = canvas.getBoundingClientRect();
+    if (Math.abs(e.clientX - r.left - r.width * state.compareX) < 28) {
+      state.dragCompare = true;
+      return;
+    }
+  }
   if (state.mode === "file") {
     pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
     return;
@@ -1007,6 +1122,19 @@ canvas.addEventListener("pointerdown", (e) => {
   if (state.tool === "picker") {
     const l = labelAt(p[0], p[1]);
     if (l !== null && l >= 0) selectLayer(l);
+    return;
+  }
+  if (state.tool === "move") {
+    // Déplacer : attrape le calque sous le doigt (ou le calque sélectionné).
+    const l = labelAt(p[0], p[1]);
+    const id = l !== null && l >= 0 ? l : state.selected;
+    if (id === null || !layerById(id)) return;
+    pushHistory();
+    const idx = [];
+    const base = new Int16Array(state.labels);
+    for (let i = 0; i < base.length; i++) if (base[i] === id) (idx.push(i), (base[i] = -1));
+    state.moving = { id, base, idx, start: p, dx: 0, dy: 0 };
+    if (state.selected !== id) selectLayer(id);
     return;
   }
   if (state.tool === "wand") {
@@ -1044,6 +1172,12 @@ canvas.addEventListener("pointermove", (e) => {
     if (touches.size >= 2) movePinch();
     return;
   }
+  if (state.dragCompare) {
+    const r = canvas.getBoundingClientRect();
+    state.compareX = Math.min(0.98, Math.max(0.02, (e.clientX - r.left) / r.width));
+    render();
+    return;
+  }
   if (pan) {
     view.tx = pan.tx + e.clientX - pan.x;
     view.ty = pan.ty + e.clientY - pan.y;
@@ -1052,6 +1186,25 @@ canvas.addEventListener("pointermove", (e) => {
   }
   const p = toWorld(e);
   state.cursor = p;
+  if (state.moving) {
+    const m = state.moving;
+    const dx = Math.round(p[0] - m.start[0]);
+    const dy = Math.round(p[1] - m.start[1]);
+    if (dx !== m.dx || dy !== m.dy) {
+      m.dx = dx;
+      m.dy = dy;
+      const { w, h, labels } = state;
+      labels.set(m.base);
+      for (const i of m.idx) {
+        const x = (i % w) + dx;
+        const y = Math.floor(i / w) + dy;
+        if (x >= 0 && y >= 0 && x < w && y < h) labels[y * w + x] = m.id;
+      }
+      updateRaster();
+      render();
+    }
+    return;
+  }
   if (state.stroke) {
     if (paintLine(state.stroke.last, p, state.stroke.value)) {
       state.stroke.changed = true;
@@ -1064,6 +1217,7 @@ canvas.addEventListener("pointermove", (e) => {
 
 function endPointer(e) {
   if (e) touches.delete(e.pointerId);
+  state.dragCompare = false;
   if (pinch) {
     if (touches.size < 2) pinch = null;
     pan = null;
@@ -1072,6 +1226,19 @@ function endPointer(e) {
   if (pan) {
     pan = null;
     canvas.classList.remove("grabbing");
+  }
+  if (state.moving) {
+    const m = state.moving;
+    state.moving = null;
+    if (!m.dx && !m.dy) {
+      state.undo.pop();
+      updateHistoryButtons();
+    } else {
+      const L = layerById(m.id);
+      if (L?.text) (L.text.cx += m.dx), (L.text.cy += m.dy);
+      scheduleVectorize(10);
+    }
+    return;
   }
   if (state.stroke) {
     const changed = state.stroke.changed;
@@ -1172,6 +1339,19 @@ function renderLayers() {
         <button class="icon" data-act="expand" title="Réglages" aria-expanded="${open}">${open ? "▴" : "▾"}</button>
       </div>
       <div class="layer-more" ${open ? "" : "hidden"}>
+        ${
+          L.text
+            ? `<div class="text-edit">
+          <div class="field"><label>Texte</label><textarea data-act="textValue" rows="2" maxlength="120"></textarea></div>
+          <div class="row2">
+            <div class="field"><label>Hauteur (mm)</label><input type="number" data-act="textSize" min="4" max="120" step="1" value="${Math.round(L.text.px * state.patternScale)}" /></div>
+            <div class="field"><label>Police</label><select data-act="textFont">${FONTS.map((f) => `<option value="${f.family}">${f.label}</option>`).join("")}</select></div>
+          </div>
+          <button class="btn small primary" data-act="textApply">Mettre à jour le texte</button>
+          <p class="hint small">Pour le déplacer : outil ✥ puis glissez le texte sur l'aperçu.</p>
+        </div>`
+            : ""
+        }
         <div class="row2">
           <div class="field">
             <label>Angle (°)</label>
@@ -1213,6 +1393,10 @@ function renderLayers() {
         </div>
       </div>`;
     li.querySelector('[data-act="type"]').value = L.type;
+    if (L.text) {
+      li.querySelector('[data-act="textValue"]').value = L.text.text;
+      li.querySelector('[data-act="textFont"]').value = L.text.font;
+    }
     list.appendChild(li);
   });
 }
@@ -1244,6 +1428,18 @@ $("#layers").addEventListener("click", (e) => {
     if (j < 0 || j >= state.layers.length) return;
     [state.layers[i], state.layers[j]] = [state.layers[j], state.layers[i]];
     changedLayers();
+  } else if (act === "textApply") {
+    const li = btn.closest(".layer");
+    const text = li.querySelector('[data-act="textValue"]').value.trim();
+    if (!text) return;
+    pushHistory();
+    const sizeMm = Number(li.querySelector('[data-act="textSize"]').value) || 10;
+    L.text = { ...L.text, text, font: li.querySelector('[data-act="textFont"]').value, px: sizeMm / (state.patternScale || geometry().mmPerPx) };
+    ensureTextFonts();
+    paintTextLayer(L, state.labels).then(() => {
+      updateRaster();
+      scheduleVectorize(10);
+    });
   } else if (act === "delete") {
     pushHistory();
     for (let i = 0; i < state.labels.length; i++) if (state.labels[i] === L.id) state.labels[i] = -1;
@@ -1258,6 +1454,7 @@ $("#layers").addEventListener("change", (e) => {
   const L = layerFromEvent(e);
   if (!L || !el.dataset.act) return;
   const act = el.dataset.act;
+  if (["textValue", "textSize", "textFont"].includes(act)) return;
   if ((act === "thread" || act === "merge") && !el.value) return;
   pushHistory();
   if (act === "color" || act === "thread") {
@@ -1276,6 +1473,8 @@ $("#layers").addEventListener("change", (e) => {
     L.angle = el.checked ? null : 45;
     changedLayers();
   } else if (["density", "stitchLength", "pullComp"].includes(act)) {
+    state.undo.pop(); // déjà enregistré au début du glissement
+    updateHistoryButtons();
     L[act] = Number(el.value);
     changedLayers();
   } else if (["underlay", "outline", "triple"].includes(act)) {
@@ -1292,9 +1491,19 @@ $("#layers").addEventListener("change", (e) => {
 });
 
 // Retour visuel immédiat sur les curseurs.
+let layerSliderTimer = null;
 $("#layers").addEventListener("input", (e) => {
   const out = e.target.parentElement.querySelector("output") || e.target.closest(".field")?.querySelector("output");
   if (out && e.target.type === "range") out.textContent = e.target.value;
+  // Aperçu en direct pendant le glissement, sans redessiner la liste.
+  const act = e.target.dataset.act;
+  const L = layerFromEvent(e);
+  if (L && ["density", "stitchLength", "pullComp"].includes(act)) {
+    historyOnce(e.target);
+    L[act] = Number(e.target.value);
+    clearTimeout(layerSliderTimer);
+    layerSliderTimer = setTimeout(() => requestCompute("stitch"), 300);
+  }
 });
 
 function changedLayers() {
@@ -1323,6 +1532,7 @@ $("#btnAddLayer").addEventListener("click", () => {
 
 /** Règle la taille par le côté le plus long du motif (mm). */
 function setLongSide(mm) {
+  pushHistory();
   const { box } = geometry();
   state.widthMm = box.w >= box.h ? mm : (mm * box.w) / box.h;
   refreshUI();
@@ -1354,6 +1564,7 @@ $("#sizeChips").addEventListener("click", (e) => {
   if (b.dataset.size === "max") {
     const fit = hoopFitWidth();
     if (!fit) return;
+    pushHistory();
     state.widthMm = Math.floor(fit);
     refreshUI();
     scheduleStitch(0);
@@ -1367,10 +1578,19 @@ $("#sizeRange").addEventListener("input", (e) => {
   const w = box.w >= box.h ? long : (long * box.w) / box.h;
   $("#sizeOut").textContent = `${fmt(w)} × ${fmt((w * box.h) / box.w)} mm`;
 });
-$("#sizeRange").addEventListener("change", (e) => setLongSide(Number(e.target.value)));
+let sizeTimer = null;
+$("#sizeRange").addEventListener("input", (e) => {
+  clearTimeout(sizeTimer);
+  sizeTimer = setTimeout(() => setLongSide(Number(e.target.value)), 350);
+});
+$("#sizeRange").addEventListener("change", (e) => {
+  clearTimeout(sizeTimer);
+  setLongSide(Number(e.target.value));
+});
 
 function refreshUI() {
   syncSizeBar();
+  syncSimpleSteps();
   const { heightMm } = geometry();
   $("#widthMm").value = Math.round(state.widthMm);
   $("#heightMm").value = Math.round(heightMm);
@@ -1399,7 +1619,45 @@ function refreshUI() {
   render();
 }
 
+let alerts = [];
+function renderAlerts() {
+  const box = $("#alerts");
+  alerts = state.pattern && state.pattern.stats.stitchCount ? checkPattern(state.pattern) : [];
+  if (state.labels && !fitsHoop()) alerts.unshift({ kind: "hoop", level: "warn", text: "Le motif dépasse le cadre choisi : utilisez « Max cadre » sous l'aperçu.", at: null });
+  for (const L of state.layers) {
+    if (L.text && L.text.px * state.patternScale < 5 && L.visible) {
+      alerts.push({ kind: "small", level: "warn", text: `Texte « ${L.text.text} » : lettres de moins de 5 mm, elles se brodent mal. Agrandissez-le.`, at: null });
+    }
+  }
+  if (!alerts.length) {
+    box.innerHTML = state.pattern?.stats.stitchCount ? `<p class="alert ok">✓ Aucun problème détecté.</p>` : "";
+    return;
+  }
+  box.innerHTML = alerts
+    .map((a, i) => `<div class="alert ${a.level}"><span></span>${a.at ? `<button class="btn small ghost" data-alert="${i}">Voir</button>` : ""}</div>`)
+    .join("");
+  // Texte inséré sans HTML (il peut contenir un texte saisi).
+  alerts.forEach((a, i) => (box.children[i].querySelector("span").textContent = (a.level === "warn" ? "⚠ " : "ℹ ") + a.text));
+}
+$("#alerts").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-alert]");
+  if (!b || !state.pattern) return;
+  const a = alerts[Number(b.dataset.alert)];
+  const k = 1 / (10 * state.patternScale);
+  const wx = a.at[0] * k + state.pattern.origin[0] / state.patternScale;
+  const wy = a.at[1] * k + state.pattern.origin[1] / state.patternScale;
+  if (state.view !== "stitch") setView("stitch");
+  const r = canvas.getBoundingClientRect();
+  view.s = Math.max(view.s, 4);
+  view.tx = r.width / 2 - wx * view.s;
+  view.ty = r.height / 2 - wy * view.s;
+  state.focus = [wx, wy];
+  setMobileTab("apercu");
+  render();
+});
+
 function renderStats() {
+  renderAlerts();
   const p = state.pattern;
   if (!p) {
     $("#stats").innerHTML = "";
@@ -1425,23 +1683,22 @@ function bindRange(id, key, handler, parse = Number) {
   el.addEventListener("input", () => {
     if (out) out.textContent = el.value;
   });
-  el.addEventListener("change", () => {
-    state.settings[key] = parse(el.value);
-    handler();
-  });
+  liveRange(
+    el,
+    (v) => {
+      if (state.settings[key] === parse(v)) return;
+      state.settings[key] = parse(v);
+      handler();
+    },
+    450,
+  );
 }
 
 bindRange("colors", "colors", () => runAnalyze());
 bindRange("cleanup", "cleanup", () => runAnalyze());
 bindRange("smoothing", "smoothing", () => runAnalyze());
-bindRange("curve", "curve", () => {
-  pushHistory();
-  scheduleVectorize();
-});
-bindRange("detail", "detail", () => {
-  pushHistory();
-  scheduleVectorize();
-});
+bindRange("curve", "curve", () => scheduleVectorize());
+bindRange("detail", "detail", () => scheduleVectorize());
 $("#removeBg").addEventListener("change", (e) => {
   state.settings.removeBackground = e.target.checked;
   runAnalyze();
@@ -1450,6 +1707,7 @@ $("#removeBg").addEventListener("change", (e) => {
 $("#widthMm").addEventListener("change", (e) => {
   const v = Number(e.target.value);
   if (!(v > 0)) return;
+  pushHistory();
   state.widthMm = v;
   refreshUI();
   scheduleStitch(0);
@@ -1458,6 +1716,7 @@ $("#widthMm").addEventListener("change", (e) => {
 $("#heightMm").addEventListener("change", (e) => {
   const v = Number(e.target.value);
   if (!(v > 0) || !state.labels) return;
+  pushHistory();
   const { box } = geometry();
   state.widthMm = (v * box.w) / box.h;
   refreshUI();
@@ -1494,6 +1753,7 @@ function fillMachineUI() {
 }
 
 $("#machine").addEventListener("change", (e) => {
+  pushHistory();
   state.machine = e.target.value;
   try {
     localStorage.setItem("filtrace.machine", state.machine);
@@ -1506,6 +1766,7 @@ $("#machine").addEventListener("change", (e) => {
 });
 
 $("#fileFormat").addEventListener("change", (e) => {
+  pushHistory();
   state.format = e.target.value;
   fillMachineUI();
   const rec = MACHINES[state.machine].format;
@@ -1558,41 +1819,49 @@ function syncStyleUI() {
 for (const id of ["spacing", "stitchLen"]) {
   $("#" + id).addEventListener("input", (e) => ($("#" + id + "Out").textContent = e.target.value));
 }
-$("#spacing").addEventListener("change", (e) => {
-  pushHistory();
-  state.spacing = Number(e.target.value);
+liveRange($("#spacing"), (v) => {
+  state.spacing = Number(v);
   for (const L of state.layers) L.density = state.spacing;
   renderLayers();
   scheduleStitch(0);
 });
-$("#stitchLen").addEventListener("change", (e) => {
-  const v = Number(e.target.value);
+liveRange($("#stitchLen"), (v) => {
+  const n = Number(v);
   if (state.style !== "fill") {
-    state.outlineLength = v;
+    state.outlineLength = n;
   } else {
-    pushHistory();
-    state.stitchLength = v;
-    for (const L of state.layers) L.stitchLength = v;
+    state.stitchLength = n;
+    for (const L of state.layers) L.stitchLength = n;
     renderLayers();
   }
   scheduleStitch(0);
 });
 
 $("#style").addEventListener("change", (e) => {
+  pushHistory();
+  const wasSketch = state.style === "sketch";
   state.style = e.target.value;
+  if (wasSketch !== (state.style === "sketch")) {
+    syncStyleUI();
+    runAnalyze();
+    return;
+  }
   syncStyleUI();
   scheduleStitch(0);
 });
 $("#outlineColor").addEventListener("change", (e) => {
+  pushHistory();
   state.outlineColor = e.target.value.toUpperCase();
   scheduleStitch(0);
 });
 $("#outlineTriple").addEventListener("change", (e) => {
+  pushHistory();
   state.outlineTriple = e.target.checked;
   scheduleStitch(0);
 });
 
 $("#hoop").addEventListener("change", (e) => {
+  pushHistory();
   state.hoop = e.target.value;
   refreshUI();
   fitView();
@@ -1600,6 +1869,7 @@ $("#hoop").addEventListener("change", (e) => {
 $("#btnFitHoop").addEventListener("click", () => {
   const fit = hoopFitWidth();
   if (!fit) return;
+  pushHistory();
   state.widthMm = Math.floor(fit);
   refreshUI();
   scheduleStitch(0);
@@ -1658,7 +1928,122 @@ $("#btnPlay").addEventListener("click", () => {
 
 // Import
 $("#fileInput").addEventListener("change", (e) => loadFile(e.target.files[0]));
-$("#btnSample").addEventListener("click", loadSample);
+// ------------------------------------------------------------------ modèles
+
+const TEMPLATES = [
+  ["coeur", "Cœur"],
+  ["etoile", "Étoile"],
+  ["fleur", "Fleur"],
+  ["badge-montagne", "Badge montagne"],
+  ["patte", "Patte"],
+  ["ancre", "Ancre"],
+  ["couronne", "Couronne"],
+  ["eclair", "Éclair"],
+  ["arc-en-ciel", "Arc-en-ciel"],
+];
+$("#templateGrid").innerHTML = TEMPLATES.map(
+  ([k, label]) => `<button type="button" data-tpl="${k}"><img src="assets/modeles/${k}.svg" alt="" loading="lazy" />${label}</button>`,
+).join("");
+$("#btnTemplates").addEventListener("click", () => $("#templatesDialog").showModal());
+$("#templatesClose").addEventListener("click", () => $("#templatesDialog").close());
+$("#templateGrid").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tpl]");
+  if (!b) return;
+  const img = new Image();
+  img.onload = () => {
+    $("#templatesDialog").close();
+    state.original = img;
+    loadImage(img, b.dataset.tpl);
+  };
+  img.src = `assets/modeles/${b.dataset.tpl}.svg`;
+});
+
+// ------------------------------------------------------------------ thème, mode simple, visite guidée
+
+function applyTheme(theme) {
+  if (theme) document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+  const dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  $("#btnTheme").textContent = dark ? "☀" : "☾";
+  $("#btnTheme").title = dark ? "Passer en mode clair" : "Passer en mode sombre";
+}
+$("#btnTheme").addEventListener("click", () => {
+  const dark = $("#btnTheme").textContent === "☾";
+  const theme = dark ? "dark" : "light";
+  try {
+    localStorage.setItem("filtrace.theme", theme);
+  } catch {}
+  applyTheme(theme);
+  render();
+});
+
+function setSimple(on) {
+  document.body.classList.toggle("simple", on);
+  $("#btnMode").textContent = on ? "Mode avancé" : "Mode simple";
+  $("#btnMode").title = on ? "Afficher tous les réglages" : "N'afficher que l'essentiel";
+  try {
+    localStorage.setItem("filtrace.mode", on ? "simple" : "advanced");
+  } catch {}
+  if (on && state.tool !== "pan") setTool("pan");
+  if (on && (state.view === "raster" || state.view === "vector")) setView("stitch");
+}
+$("#btnMode").addEventListener("click", () => setSimple(!document.body.classList.contains("simple")));
+
+function syncSimpleSteps() {
+  $("#sstep1").classList.toggle("done", !!state.labels);
+  $("#sstep2").classList.toggle("done", !!state.labels && fitsHoop());
+}
+
+const TOUR = [
+  { el: "#dropzone", tab: "reglages", text: "Commencez ici : importez une image (photo, logo, dessin), ou choisissez un de nos modèles." },
+  { el: "#btnText", tab: "reglages", text: "Ajoutez un prénom ou un mot, dans la police et à la hauteur de votre choix." },
+  { el: "#machine", tab: "reglages", text: "Choisissez votre machine : le bon format de fichier et les bons cadres sont réglés pour vous." },
+  { el: "#sizeBar", tab: "apercu", text: "Choisissez la taille de la broderie. Elle passe en rouge si elle ne rentre pas dans le cadre." },
+  { el: "#btnQuick", tab: null, text: "Téléchargez le fichier et copiez-le sur la clé USB de votre machine." },
+  { el: "#btnMode", tab: null, text: "Besoin de plus de réglages (types de points, densité, retouches) ? Passez en mode avancé." },
+];
+let tourStep = -1;
+function showTour(i) {
+  $$(".tour-highlight").forEach((e) => e.classList.remove("tour-highlight"));
+  tourStep = i;
+  const step = TOUR[i];
+  if (!step) {
+    $("#tour").hidden = true;
+    try {
+      localStorage.setItem("filtrace.tour", "done");
+    } catch {}
+    return;
+  }
+  if (step.tab && matchMedia("(max-width: 860px)").matches) setMobileTab(step.tab);
+  const el = $(step.el);
+  el.scrollIntoView({ block: "center", behavior: "instant" });
+  el.classList.add("tour-highlight");
+  $("#tourText").textContent = step.text;
+  $("#tourCount").textContent = `${i + 1} / ${TOUR.length}`;
+  $("#tourNext").textContent = i === TOUR.length - 1 ? "Terminer" : "Suivant";
+  const tour = $("#tour");
+  tour.hidden = false;
+  requestAnimationFrame(() => {
+    const r = el.getBoundingClientRect();
+    const t = tour.getBoundingClientRect();
+    const below = r.bottom + 12 + t.height < innerHeight;
+    tour.style.top = `${below ? r.bottom + 12 : Math.max(12, r.top - t.height - 12)}px`;
+    tour.style.left = `${Math.min(innerWidth - t.width - 12, Math.max(12, r.left))}px`;
+  });
+}
+$("#tourNext").addEventListener("click", () => showTour(tourStep + 1));
+$("#tourSkip").addEventListener("click", () => showTour(TOUR.length));
+$("#btnTour").addEventListener("click", () => showTour(0));
+
+// ------------------------------------------------------------------ avant / après
+
+$("#btnCompare").addEventListener("click", () => {
+  state.compare = !state.compare;
+  $("#btnCompare").setAttribute("aria-pressed", String(state.compare));
+  if (state.compare && state.view !== "stitch") setView("stitch");
+  render();
+});
+
 for (const zone of [$("#dropzone"), $("#canvasWrap")]) {
   zone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -1687,7 +2072,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     redo();
   } else if (!mod) {
-    const map = { h: "pan", b: "brush", e: "eraser", g: "bucket", i: "picker", w: "wand" };
+    const map = { h: "pan", b: "brush", e: "eraser", g: "bucket", i: "picker", w: "wand", m: "move" };
     const views = { 1: "original", 2: "raster", 3: "vector", 4: "stitch" };
     if (map[e.key]) setTool(map[e.key]);
     else if (views[e.key]) setView(views[e.key]);
@@ -1743,6 +2128,54 @@ $("#threadChart").addEventListener("change", (e) => {
   if (state.pattern) state.pattern.threads.forEach((t, i) => (t.name = state.layers.find((L) => L.color === t.color)?.name || t.name));
 });
 
+// ------------------------------------------------------------------ mes bobines
+
+function renderOwned() {
+  const set = new Set(state.owned);
+  $("#ownedGrid").innerHTML = THREAD_CHARTS[state.threadChart].threads
+    .map(
+      (t) => `<label class="owned-item" title="${t[1]} · ${t[2]}"><input type="checkbox" value="#${t[0]}" ${set.has("#" + t[0]) ? "checked" : ""} />
+      <span class="sw" style="background:#${t[0]}"></span><span>${t[2]} · ${t[1]}</span></label>`,
+    )
+    .join("");
+  $("#useOwned").checked = state.useOwned;
+  $("#ownedCount").textContent = `${state.owned.length} bobine(s) cochée(s)`;
+  $("#btnOwned").textContent = `Mes bobines (${state.owned.length})`;
+}
+function saveOwned() {
+  try {
+    localStorage.setItem("filtrace.owned", JSON.stringify({ owned: state.owned, use: state.useOwned }));
+  } catch {}
+}
+$("#btnOwned").addEventListener("click", () => {
+  renderOwned();
+  $("#ownedDialog").showModal();
+});
+$("#ownedClose").addEventListener("click", () => $("#ownedDialog").close());
+$("#ownedGrid").addEventListener("change", (e) => {
+  const v = e.target.value.toUpperCase();
+  state.owned = e.target.checked ? [...new Set([...state.owned, v])] : state.owned.filter((h) => h !== v);
+  saveOwned();
+  $("#ownedCount").textContent = `${state.owned.length} bobine(s) cochée(s)`;
+  $("#btnOwned").textContent = `Mes bobines (${state.owned.length})`;
+});
+$("#useOwned").addEventListener("change", (e) => {
+  state.useOwned = e.target.checked;
+  saveOwned();
+});
+$("#ownedApply").addEventListener("click", () => {
+  $("#ownedDialog").close();
+  if (!state.useOwned || !state.owned.length) {
+    toast("Cochez vos bobines et « N'utiliser que mes bobines ».", "bad");
+    return;
+  }
+  pushHistory();
+  applyOwnedThreads(state.layers);
+  updateRaster();
+  changedLayers();
+  toast("Couleurs remplacées par vos bobines les plus proches.", "ok");
+});
+
 // ------------------------------------------------------------------ texte
 
 $("#textFont").innerHTML = FONTS.map((f) => `<option value="${f.family}">${f.label}</option>`).join("");
@@ -1769,7 +2202,21 @@ async function drawTextPreview() {
   await drawText(g, o.text, { font: o.font, px: 60 * k, color: o.color, cx: c.width / 2, cy: c.height / 2 });
 }
 
+let textFontsLoaded = false;
+/** Polices du texte chargées seulement quand on en a besoin. */
+function ensureTextFonts() {
+  if (textFontsLoaded) return;
+  textFontsLoaded = true;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href =
+    "https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Dancing+Script:wght@700&family=Lobster&family=Pacifico&family=Roboto+Slab:wght@700&display=swap";
+  link.onload = () => drawTextPreview();
+  document.head.appendChild(link);
+}
+
 function openTextDialog() {
+  ensureTextFonts();
   $("#textAdd").disabled = !state.labels || state.mode === "file";
   $("#textDialog").showModal();
   drawTextPreview();
@@ -1825,29 +2272,39 @@ $("#textAdd").addEventListener("click", async () => {
   const needSide = Math.max(0, Math.ceil(m.width / 2 - cx + 4), Math.ceil(cx + m.width / 2 - state.w + 4));
   pushHistory();
   growCanvas(needTop, needBottom, needSide);
-  const ox = needSide;
-  const oy = needTop;
-  // Dessin des lettres dans l'image source et dans un masque.
-  const sg = state.source.getContext("2d", { willReadFrequently: true });
-  await drawText(sg, o.text, { font: o.font, px, color: o.color, cx: cx + ox, cy: cy + oy });
+  const id = Math.max(-1, ...state.layers.map((L) => L.id)) + 1;
+  const T = {
+    id,
+    source: o.color,
+    color: o.color,
+    name: threadLabel(o.color) + " (texte)",
+    visible: true,
+    ...DEFAULT_LAYER,
+    density: state.spacing,
+    // Paramètres gardés : le texte reste modifiable et survit aux réanalyses.
+    text: { text: o.text, font: o.font, px, cx: cx + needSide, cy: cy + needTop },
+  };
+  await paintTextLayer(T, state.labels);
+  state.layers.push(T);
+  // Garde l'échelle : le texte fait bien la hauteur demandée.
+  state.selected = id;
+  state.expanded.add(id);
+  $("#textDialog").close();
+  state.widthMm = geometry().box.w * mmPerPx;
+  requestCompute("vectorize", { fit: true });
+});
+
+/** Dessine les lettres d'un calque texte dans la carte des calques. */
+async function paintTextLayer(T, labels) {
+  for (let i = 0; i < labels.length; i++) if (labels[i] === T.id) labels[i] = -1;
   const mask = document.createElement("canvas");
   mask.width = state.w;
   mask.height = state.h;
   const mg = mask.getContext("2d", { willReadFrequently: true });
-  await drawText(mg, o.text, { font: o.font, px, color: "#000", cx: cx + ox, cy: cy + oy });
+  await drawText(mg, T.text.text, { font: T.text.font, px: T.text.px, color: "#000", cx: T.text.cx, cy: T.text.cy });
   const md = mg.getImageData(0, 0, state.w, state.h).data;
-  const id = Math.max(-1, ...state.layers.map((L) => L.id)) + 1;
-  for (let i = 0; i < state.labels.length; i++) if (md[i * 4 + 3] >= 128) state.labels[i] = id;
-  state.rgbaBase = sg.getImageData(0, 0, state.w, state.h).data;
-  state.rgba = adjustPixels(state.rgbaBase, state.photo);
-  state.layers.push({ id, source: o.color, color: o.color, name: threadLabel(o.color) + " (texte)", visible: true, ...DEFAULT_LAYER, density: state.spacing });
-  // Garde l'échelle : le texte fait bien la hauteur demandée.
-  const before = mmPerPx;
-  state.selected = id;
-  $("#textDialog").close();
-  state.widthMm = geometry().box.w * before;
-  requestCompute("vectorize", { fit: true });
-});
+  for (let i = 0; i < labels.length; i++) if (md[i * 4 + 3] >= 128) labels[i] = T.id;
+}
 
 /** Agrandit l'image de travail (marges blanches) en conservant les calques. */
 function growCanvas(top, bottom, side) {
@@ -2348,6 +2805,8 @@ new ResizeObserver(() => {
 }).observe($("#canvasWrap"));
 try {
   const chart = localStorage.getItem("filtrace.chart");
+  const owned = JSON.parse(localStorage.getItem("filtrace.owned") || "null");
+  if (owned) (state.owned = owned.owned || []), (state.useOwned = !!owned.use);
   if (THREAD_CHARTS[chart]) state.threadChart = chart;
   const saved = localStorage.getItem("filtrace.machine");
   if (MACHINES[saved]) {
@@ -2358,6 +2817,19 @@ try {
 } catch {}
 syncSettingsUI();
 setView("stitch");
+let savedTheme = null;
+let savedMode = null;
+let tourDone = false;
+try {
+  savedTheme = localStorage.getItem("filtrace.theme");
+  savedMode = localStorage.getItem("filtrace.mode");
+  tourDone = localStorage.getItem("filtrace.tour") === "done";
+} catch {}
+applyTheme(savedTheme);
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => applyTheme(document.documentElement.dataset.theme));
+// Première visite : mode simple et visite guidée.
+setSimple(savedMode !== "advanced");
+if (!tourDone && !window.FILTRACE_AUTOSAMPLE) setTimeout(() => showTour(0), 600);
 try {
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
     navigator.serviceWorker.register("sw.js").catch(() => {});

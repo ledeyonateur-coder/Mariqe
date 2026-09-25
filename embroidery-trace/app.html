@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Dancing+Script:wght@700&family=Lobster&family=Pacifico&family=Roboto+Slab:wght@700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/app.css" />
 </head>
@@ -24,6 +24,9 @@
     </a>
     <div class="topbar-file" id="fileName">Aucune image</div>
     <div class="topbar-actions">
+      <button class="btn ghost" id="btnMode" title="Afficher plus ou moins de réglages">Mode avancé</button>
+      <button class="btn ghost icon-btn" id="btnTour" title="Visite guidée">?</button>
+      <button class="btn ghost icon-btn" id="btnTheme" title="Mode sombre / clair">☾</button>
       <button class="btn ghost" id="btnUndo" title="Annuler (Ctrl+Z)" disabled>↶</button>
       <button class="btn ghost" id="btnRedo" title="Rétablir (Ctrl+Maj+Z)" disabled>↷</button>
       <button class="btn ghost" id="btnProjects" title="Mes projets enregistrés">Mes projets</button>
@@ -36,6 +39,14 @@
   <main class="workspace">
     <!-- Panneau gauche : image, couleurs, taille -->
     <aside class="panel left" id="leftPanel">
+      <section class="card simple-steps" data-simple-only>
+        <h2>En 3 étapes</h2>
+        <ol>
+          <li id="sstep1"><b>Choisis une image</b> ou un modèle ci-dessous</li>
+          <li id="sstep2"><b>Choisis la taille</b> sous l'aperçu</li>
+          <li id="sstep3"><b>Télécharge</b> le fichier pour ta machine</li>
+        </ol>
+      </section>
       <section class="card">
         <h2><span class="step">1</span> Image</h2>
         <label class="dropzone" id="dropzone">
@@ -45,7 +56,7 @@
         </label>
         <div class="row-buttons">
           <button class="btn small ghost" id="btnCrop" disabled>✂ Recadrer</button>
-          <button class="btn small ghost" id="btnSample">Exemple</button>
+          <button class="btn small ghost" id="btnTemplates">Modèles</button>
         </div>
         <div class="row-buttons">
           <button class="btn small ghost" id="btnText" title="Ajouter un prénom, un mot…">Aa Texte</button>
@@ -53,7 +64,7 @@
             Fichier broderie<input type="file" id="embInput" accept=".dst,.exp,.jef,.pes,.pec,.vp3" hidden />
           </label>
         </div>
-        <details class="photo-adjust" data-needs-image data-hide-file>
+        <details class="photo-adjust" data-needs-image data-hide-file data-adv>
           <summary>Retouche photo</summary>
           <div class="field">
             <label for="brightness">Luminosité <output id="brightnessOut">0</output></label>
@@ -79,6 +90,7 @@
             <option value="fill">Remplie (couleurs pleines)</option>
             <option value="outline">Contours (chaque couleur)</option>
             <option value="outline1">Contours (un seul fil)</option>
+            <option value="sketch">Dessin au trait (pour les photos)</option>
           </select>
         </div>
         <div class="field" id="fabricField">
@@ -86,7 +98,7 @@
           <select id="fabricType"></select>
           <span class="hint small" id="fabricTip"></span>
         </div>
-        <div class="field" id="stitchPickField">
+        <div class="field" id="stitchPickField" data-adv>
           <label>Type de point (tout le motif)</label>
           <div class="stitch-pick" id="stitchPick" role="radiogroup" aria-label="Type de point">
             <button type="button" role="radio" data-type="auto" title="Satin pour les formes fines, remplissage pour les surfaces">
@@ -112,12 +124,12 @@
           </div>
           <span class="hint small" id="stitchPickHint">Réglable ensuite couleur par couleur dans « Calques de fil ».</span>
         </div>
-        <div class="field" id="spacingField">
+        <div class="field" id="spacingField" data-adv>
           <label for="spacing">Espacement entre les fils (mm) <output id="spacingOut">0.4</output></label>
           <input type="range" id="spacing" min="0.25" max="1.5" step="0.05" value="0.4" />
           <span class="hint small" id="spacingHint">Serré : couvrant, plus de points. Espacé : plus léger et plus rapide.</span>
         </div>
-        <div class="field">
+        <div class="field" data-adv>
           <label for="stitchLen">Longueur des points (mm) <output id="stitchLenOut">3</output></label>
           <input type="range" id="stitchLen" min="1" max="7" step="0.5" value="3" />
         </div>
@@ -130,15 +142,15 @@
           <input type="range" id="colors" min="2" max="16" value="6" />
         </div>
         <label class="check"><input type="checkbox" id="removeBg" checked /> Retirer le fond</label>
-        <div class="field">
+        <div class="field" data-adv>
           <label for="cleanup">Nettoyage des petits détails <output id="cleanupOut">30</output></label>
           <input type="range" id="cleanup" min="0" max="400" step="5" value="30" />
         </div>
-        <div class="field">
+        <div class="field" data-adv>
           <label for="smoothing">Lissage des bords <output id="smoothingOut">1</output></label>
           <input type="range" id="smoothing" min="0" max="4" value="1" />
         </div>
-        <details>
+        <details data-adv>
           <summary>Vectorisation avancée</summary>
           <div class="field">
             <label for="curve">Arrondi des courbes <output id="curveOut">1</output></label>
@@ -153,7 +165,7 @@
 
       <section class="card" data-needs-image>
         <h2><span class="step">3</span> Taille &amp; cadre</h2>
-        <div class="row2">
+        <div class="row2" data-adv>
           <div class="field">
             <label for="widthMm">Largeur (mm)</label>
             <input type="number" id="widthMm" min="5" max="1000" step="1" value="100" />
@@ -171,11 +183,12 @@
           <label for="hoop">Cadre</label>
           <select id="hoop"></select>
         </div>
-        <div class="field">
+        <div class="field" data-adv>
           <label for="threadChart">Nuancier de fils</label>
           <select id="threadChart"></select>
+          <button class="btn small ghost" id="btnOwned" type="button">Mes bobines (0)</button>
         </div>
-        <div class="field">
+        <div class="field" data-adv>
           <label for="fileFormat">Type de fichier</label>
           <select id="fileFormat"></select>
         </div>
@@ -189,21 +202,23 @@
       <div class="stage-bar">
         <div class="tabs" role="tablist" id="viewTabs">
           <button role="tab" data-view="original">Image</button>
-          <button role="tab" data-view="raster">Couleurs</button>
-          <button role="tab" data-view="vector">Vecteurs</button>
+          <button role="tab" data-view="raster" data-adv>Couleurs</button>
+          <button role="tab" data-view="vector" data-adv>Vecteurs</button>
           <button role="tab" data-view="stitch" class="active">Points</button>
         </div>
-        <div class="tools" id="tools">
+        <div class="tools" id="tools" data-adv>
           <button data-tool="pan" class="active" title="Déplacer (H)">✋</button>
           <button data-tool="brush" title="Pinceau : peindre avec le calque sélectionné (B)">🖌</button>
           <button data-tool="eraser" title="Gomme : retirer de la broderie (E)">⌫</button>
           <button data-tool="bucket" title="Pot : recolorer une zone entière (G)">🪣</button>
           <button data-tool="picker" title="Pipette : sélectionner le calque sous le curseur (I)">⌖</button>
+          <button data-tool="move" title="Déplacer un calque (texte, forme) au doigt ou à la souris (M)">✥</button>
           <button data-tool="wand" title="Baguette : retirer toute une zone de la broderie, ex. un fond (W)">🪄</button>
           <label class="brush-size" title="Taille du pinceau">
             <input type="range" id="brushSize" min="1" max="60" value="10" />
           </label>
         </div>
+        <button class="btn small ghost" id="btnCompare" title="Comparer l'image et la broderie" aria-pressed="false">◧ Avant / après</button>
         <div class="zoom">
           <button id="zoomOut" title="Dézoomer">−</button>
           <button id="zoomFit" title="Ajuster">⤢</button>
@@ -251,12 +266,13 @@
       <section class="card">
         <div class="card-head">
           <h2><span class="step">4</span> Calques de fil</h2>
-          <button class="btn small ghost" id="btnAddLayer" data-hide-file title="Ajouter un calque à peindre">+ Calque</button>
+          <button class="btn small ghost" id="btnAddLayer" data-hide-file data-adv title="Ajouter un calque à peindre">+ Calque</button>
         </div>
         <p class="hint">Ordre de broderie de haut en bas. Choisissez le type de point de chaque couleur.</p>
         <ol class="layers" id="layers"></ol>
       </section>
       <section class="card stats" id="stats"></section>
+      <section class="card alerts" id="alerts" aria-live="polite"></section>
     </aside>
   </main>
 
@@ -390,6 +406,41 @@
     <button data-mtab="calques">🧵<span>Calques</span></button>
     <button data-mtab="export">⬇<span>Fichier</span></button>
   </nav>
+
+  <!-- Modèles -->
+  <dialog id="templatesDialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Modèles prêts à broder</h2>
+      <button class="btn ghost small" id="templatesClose" aria-label="Fermer">✕</button>
+    </div>
+    <p class="hint">Choisissez un motif pour essayer, puis changez les couleurs ou ajoutez un prénom.</p>
+    <div class="template-grid" id="templateGrid"></div>
+  </dialog>
+
+  <!-- Mes bobines -->
+  <dialog id="ownedDialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Mes bobines</h2>
+      <button class="btn ghost small" id="ownedClose" aria-label="Fermer">✕</button>
+    </div>
+    <p class="hint">Cochez les fils que vous avez. Les couleurs du motif seront remplacées par votre bobine la plus proche.</p>
+    <label class="check"><input type="checkbox" id="useOwned" /> N'utiliser que mes bobines (aussi pour les prochaines images)</label>
+    <div class="owned-grid" id="ownedGrid"></div>
+    <div class="crop-actions">
+      <span class="hint small" id="ownedCount"></span>
+      <button type="button" class="btn primary" id="ownedApply">Appliquer au motif</button>
+    </div>
+  </dialog>
+
+  <!-- Visite guidée -->
+  <div class="tour" id="tour" hidden role="dialog" aria-live="polite">
+    <p id="tourText"></p>
+    <div class="tour-actions">
+      <span class="hint small" id="tourCount"></span>
+      <button class="btn small ghost" id="tourSkip">Passer</button>
+      <button class="btn small primary" id="tourNext">Suivant</button>
+    </div>
+  </div>
 
   <div class="toast" id="toast" role="status" hidden></div>
   <script type="module" src="js/app.js"></script>

@@ -15,6 +15,48 @@
   --shadow: 0 1px 2px rgba(29, 26, 22, 0.06), 0 8px 24px rgba(29, 26, 22, 0.06);
   --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --display: "Fraunces", Georgia, serif;
+  --on-ink: #ffffff;
+  --stage: #ebe6dd;
+  --stage-check: #e2dccf;
+  color-scheme: light;
+}
+
+/* Mode sombre : suit le système, ou le choix fait avec le bouton ☾ / ☀. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16130f;
+    --surface: #1f1b17;
+    --surface-2: #27221c;
+    --ink: #efe9df;
+    --muted: #a89f92;
+    --line: #3a332c;
+    --accent: #ec6a52;
+    --accent-soft: #3b2019;
+    --ok: #62bf88;
+    --bad: #f07565;
+    --on-ink: #16130f;
+    --stage: #0f0d0a;
+    --stage-check: #181511;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16130f;
+  --surface: #1f1b17;
+  --surface-2: #27221c;
+  --ink: #efe9df;
+  --muted: #a89f92;
+  --line: #3a332c;
+  --accent: #ec6a52;
+  --accent-soft: #3b2019;
+  --ok: #62bf88;
+  --bad: #f07565;
+  --on-ink: #16130f;
+  --stage: #0f0d0a;
+  --stage-check: #181511;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -38,7 +80,7 @@ h1, h2, h3 { line-height: 1.15; }
   border-radius: 999px;
   border: 1px solid var(--ink);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font: 600 14px/1 var(--font);
   cursor: pointer;
   text-decoration: none;
