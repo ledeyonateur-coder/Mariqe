@@ -470,3 +470,8 @@ body:not(.simple) [data-simple-only] { display: none !important; }
   .topbar .brand { flex: none; }
   .topbar .brand img { width: 28px; height: 28px; }
 }
+
+.save-actions { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.save-actions .btn { text-decoration: none; }
+.save-warning { background: var(--accent-soft); border-radius: 12px; padding: 12px; font-size: 13px; }
+.save-warning p { margin: 0 0 8px; }

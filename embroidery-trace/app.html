@@ -467,6 +467,24 @@
     </div>
   </dialog>
 
+  <!-- Enregistrement du fichier (téléphone) -->
+  <dialog id="saveDialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Ton fichier est prêt</h2>
+      <button class="btn ghost small" id="saveClose" aria-label="Fermer">✕</button>
+    </div>
+    <p class="hint" id="saveName"></p>
+    <div class="save-actions">
+      <a class="btn primary large full" id="saveDownload" href="#" download>⬇ Télécharger</a>
+      <button type="button" class="btn ghost large full" id="saveShare" hidden>📤 Enregistrer dans Fichiers / Partager</button>
+    </div>
+    <p class="hint small" id="saveIosHint" hidden>Sur iPhone, le fichier arrive dans l'app <b>Fichiers</b> › Téléchargements. Tu peux aussi utiliser « Enregistrer dans Fichiers / Partager ».</p>
+    <div class="save-warning" id="saveInApp" hidden>
+      <p><b>⚠ Tu es dans le navigateur d'une application</b> (Google, Instagram, Facebook…), qui bloque souvent les téléchargements. Si rien ne se passe, ouvre le site dans Chrome ou Safari : menu ⋮ ou ⋯ puis « Ouvrir dans le navigateur », ou copie le lien.</p>
+      <button type="button" class="btn small ghost" id="saveCopyLink">Copier le lien du site</button>
+    </div>
+  </dialog>
+
   <!-- Visite guidée -->
   <div class="tour" id="tour" hidden role="dialog" aria-live="polite">
     <p id="tourText"></p>

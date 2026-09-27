@@ -140,6 +140,9 @@ async function download(data, name, type = "application/octet-stream") {
     return;
   }
   const blob = data instanceof Blob ? data : new Blob([data], { type });
+  // Sur téléphone, le téléchargement doit partir d'un toucher direct : on
+  // affiche une fenêtre avec un vrai bouton (et le partage vers Fichiers).
+  if (IS_MOBILE) return openSaveSheet(blob, name, type);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -148,6 +151,46 @@ async function download(data, name, type = "application/octet-stream") {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+
+const UA = navigator.userAgent;
+const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(UA) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(UA));
+const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(UA));
+// Navigateurs intégrés aux applis (Google, Instagram, Facebook…) : ils
+// bloquent souvent les téléchargements.
+const IN_APP = /GSA\/|FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|TikTok|Pinterest|; wv\)/i.test(UA);
+
+let saveUrl = null;
+function openSaveSheet(blob, name, type) {
+  if (saveUrl) URL.revokeObjectURL(saveUrl);
+  saveUrl = URL.createObjectURL(blob);
+  const link = $("#saveDownload");
+  link.href = saveUrl;
+  link.download = name;
+  $("#saveName").textContent = `${name} · ${fmt(blob.size / 1024, 1)} Ko`;
+  const file = new File([blob], name, { type: type || "application/octet-stream" });
+  const canShare = !!navigator.canShare?.({ files: [file] });
+  $("#saveShare").hidden = !canShare;
+  $("#saveShare").onclick = async () => {
+    try {
+      await navigator.share({ files: [file], title: name });
+    } catch (e) {
+      if (e?.name !== "AbortError") toast("Partage impossible : utilisez « Télécharger ».", "bad");
+    }
+  };
+  $("#saveInApp").hidden = !IN_APP;
+  $("#saveIosHint").hidden = !IS_IOS;
+  $("#saveDialog").showModal();
+}
+$("#saveClose").addEventListener("click", () => $("#saveDialog").close());
+$("#saveCopyLink").addEventListener("click", async () => {
+  const url = location.href.split("?")[0];
+  try {
+    await navigator.clipboard.writeText(url);
+    $("#saveCopyLink").textContent = "Lien copié ✓";
+  } catch {
+    $("#saveCopyLink").textContent = url;
+  }
+});
 
 let busyTimer = null;
 function busy(on) {
