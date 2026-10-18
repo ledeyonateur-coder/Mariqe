@@ -3,7 +3,8 @@
 
 import { quantize, detectBackground, mergeSmallRegions, smoothLabels } from "./quantize.js";
 import { vectorizeLayer } from "./trace.js";
-import { layerRuns, buildPattern, appliqueSteps, DEFAULT_LAYER } from "./stitch.js";
+import { layerRuns, buildPattern, appliqueSteps, pathRuns, DEFAULT_LAYER } from "./stitch.js";
+import { satinPath } from "./satin.js";
 
 export const APPLIQUE_LABELS = {
   placement: "ligne de placement",
@@ -101,7 +102,9 @@ export function vectorizeAll(labels, w, h, layers, settings = {}, onProgress = n
  *                       couleur par calque) ou "outline1" (contours d'un seul fil)
  */
 export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
-  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, outlineLength = 2.5, onProgress = null, ...buildOptions } = options;
+  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, outlineLength = 2.5, onProgress = null, strokes = [], traceOnly = false, ...buildOptions } = options;
+  // Calquer la photo : seule la main de l'utilisateur est brodée, pas l'image.
+  if (traceOnly) layers = [];
   const visible = layers.filter((L) => L.visible && L.type !== "none");
   let done = 0;
   const outline = style === "outline" || style === "outline1";
@@ -131,10 +134,31 @@ export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
     const runs = orderRuns(prepared.flatMap((L) => L.runs));
     prepared = [{ color: outlineColor, name: "Contour", id: prepared[0].id, runs }];
   }
+  prepared.push(...strokeLayers(strokes));
   const pattern = buildPattern(prepared, buildOptions);
   pattern.layerIds = prepared.map((L) => L.id);
   pattern.steps = prepared.map((L) => L.step || null);
   return pattern;
+}
+
+/**
+ * Traits dessinés à la main (en mm) -> calques de fil, un par couleur,
+ * dans l'ordre où les couleurs apparaissent.
+ * stroke = {points, closed, color, name, stitch: running|triple|satin|fill, width}
+ */
+export function strokeLayers(strokes) {
+  const groups = new Map();
+  for (const st of strokes) {
+    if (!st.points || st.points.length < 2) continue;
+    let runs;
+    if (st.stitch === "satin") runs = satinPath(st.points, { width: st.width || 3, density: st.density || 0.4, closed: st.closed });
+    else if (st.stitch === "fill" && st.closed && st.points.length >= 3) runs = layerRuns([st.points], { ...DEFAULT_LAYER, type: "fill", angle: 45, density: st.density || 0.4 });
+    else runs = pathRuns(st.points, { closed: st.closed, triple: st.stitch === "triple", stitchLength: st.stitchLength || 2.5 });
+    if (!runs.length) continue;
+    if (!groups.has(st.color)) groups.set(st.color, { color: st.color, name: st.name || st.color, id: `trait-${st.color}`, runs: [] });
+    groups.get(st.color).runs.push(...runs);
+  }
+  return [...groups.values()].map((g) => ({ ...g, runs: orderRuns(g.runs) }));
 }
 
 /** Enchaîne les tracés en allant toujours au départ le plus proche (moins de sauts). */

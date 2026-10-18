@@ -662,3 +662,21 @@ export function patternStats(stitches, threads) {
     layers,
   };
 }
+
+/**
+ * Point droit le long d'un tracé (ouvert ou fermé), en mm.
+ * Option triple : chaque point est cousu aller-retour-aller (trait épais).
+ */
+export function pathRuns(points, { stitchLength = 2.5, closed = false, triple = false } = {}) {
+  if (points.length < 2) return [];
+  const path = closed ? points.concat([points[0]]) : points;
+  const pts = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const n = Math.max(1, Math.ceil(dist(a, b) / stitchLength));
+    for (let k = 1; k <= n; k++) pts.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+  }
+  const run = triple ? pts.slice(0, 1).concat(...pts.slice(1).map((p, i) => [p, pts[i], p])) : pts;
+  return [dedupe(run, 0.3)].filter((r) => r.length > 1);
+}

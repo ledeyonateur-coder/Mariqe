@@ -475,3 +475,33 @@ body:not(.simple) [data-simple-only] { display: none !important; }
 .save-actions .btn { text-decoration: none; }
 .save-warning { background: var(--accent-soft); border-radius: 12px; padding: 12px; font-size: 13px; }
 .save-warning p { margin: 0 0 8px; }
+
+/* Mode dessin */
+.draw-bar { background: var(--surface); border-bottom: 1px solid var(--line); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+.draw-tools { display: flex; gap: 4px; flex-wrap: wrap; }
+.draw-tools button { display: flex; align-items: center; gap: 5px; height: 34px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font: 600 12.5px/1 var(--font); }
+.draw-tools button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.draw-opts { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.draw-opts select { width: auto; padding: 6px 8px; }
+.draw-color input { width: 38px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }
+.draw-width { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.draw-width input { width: 90px; }
+.draw-width output { color: var(--ink); font-weight: 600; min-width: 40px; }
+#btnDraw[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+#view[data-draw="1"] { cursor: crosshair; }
+@media (max-width: 860px) {
+  .draw-tools button span { display: none; }
+  .draw-tools button { padding: 0 12px; font-size: 16px; }
+  .draw-hint, #drawHint { display: none; }
+}
+
+@media (max-width: 860px) {
+  /* En dessin sur téléphone : toute la place pour tracer. */
+  body.drawing .size-bar, body.drawing .stage-foot { display: none; }
+  body.drawing[data-mtab="apercu"] .stage { height: calc(100dvh - 140px); }
+  .draw-bar { padding: 6px 10px; gap: 6px; }
+  .draw-tools { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .draw-opts { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .draw-opts > * { flex: none; }
+  .draw-tools::-webkit-scrollbar, .draw-opts::-webkit-scrollbar { display: none; }
+}

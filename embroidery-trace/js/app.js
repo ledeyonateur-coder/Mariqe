@@ -64,6 +64,15 @@ const state = {
   pendingWidthMm: null,
   pendingTextOnly: false,
   compare: false,
+  // Dessin à la main (comme Paint) : traits brodés par-dessus la photo.
+  drawMode: false,
+  dtool: "pencil", // pencil | line | rect | ellipse | select | erase
+  drawStyle: { color: "#1D1A16", stitch: "running", width: 3 },
+  strokes: [], // {id, points (px), closed, color, stitch, width}
+  traceOnly: false, // ne broder que les traits (la photo sert de modèle)
+  photoOpacity: 0.4,
+  selectedStroke: null,
+  drawing: null, // trait en cours
   focus: null, // point mis en évidence par une alerte
   compareX: 0.5, // position du séparateur avant / après (0..1)
   owned: [], // Mes bobines : couleurs de fil possédées
@@ -207,7 +216,7 @@ engine.setProgressHandler((label, v) => {
 // ------------------------------------------------------------------ historique
 
 // Réglages suivis par Annuler / Rétablir (taille, tissu, machine, style…).
-const SNAP_KEYS = ["widthMm", "spacing", "stitchLength", "fabricType", "machine", "hoop", "format", "style", "outlineColor", "outlineTriple", "outlineLength", "photo", "settings"];
+const SNAP_KEYS = ["strokes", "traceOnly", "widthMm", "spacing", "stitchLength", "fabricType", "machine", "hoop", "format", "style", "outlineColor", "outlineTriple", "outlineLength", "photo", "settings"];
 
 function snapshot() {
   const snap = {
@@ -337,6 +346,9 @@ $("#btnCrop").addEventListener("click", async () => {
 
 function loadImage(img, name, { widthMm = null } = {}) {
   imageGen++;
+  state.strokes = [];
+  state.traceOnly = false;
+  state.selectedStroke = null;
   state.pendingWidthMm = widthMm;
   leaveFileMode();
   let iw = img.naturalWidth || img.width || 800;
@@ -428,6 +440,8 @@ function openFilePattern(p, name, widthMm = null) {
   $("#fileName").textContent = name;
   $("#designName").value = safeDesignName(name);
   document.body.classList.add("has-image", "file-mode");
+  state.strokes = [];
+  if (state.drawMode) setDrawMode(false);
   $("#emptyState").hidden = true;
   $("#btnCrop").disabled = true;
   imageGen++;
@@ -599,6 +613,16 @@ async function doStitch(gen) {
     outlineColor: state.outlineColor,
     outlineTriple: state.outlineTriple,
     outlineLength: state.outlineLength,
+    traceOnly: state.traceOnly,
+    strokes: state.strokes.map((st) => ({
+      points: st.points.map(([x, y]) => [x * mmPerPx, y * mmPerPx]),
+      closed: st.closed,
+      color: st.color,
+      name: threadLabel(st.color) + " (trait)",
+      stitch: st.stitch,
+      width: st.width,
+      density: state.spacing,
+    })),
   });
   if (gen !== imageGen) return false;
   state.patternScale = mmPerPx;
@@ -661,9 +685,27 @@ function geometry() {
   }
   if (!state.labels) return { box: { x: 0, y: 0, w: 1, h: 1 }, mmPerPx: 1, heightMm: 0 };
   const ignored = new Set(state.layers.filter((L) => L.type === "none").map((L) => L.id));
-  const box = contentBounds(state.labels, state.w, state.h, ignored);
+  let box = contentBounds(state.labels, state.w, state.h, ignored);
+  // Les traits dessinés comptent dans la taille ; seuls, s'ils calquent la photo.
+  const sb = strokesBounds();
+  if (sb && state.traceOnly) box = sb;
+  else if (sb) {
+    const x = Math.min(box.x, sb.x);
+    const y = Math.min(box.y, sb.y);
+    box = { x, y, w: Math.max(box.x + box.w, sb.x + sb.w) - x, h: Math.max(box.y + box.h, sb.y + sb.h) - y };
+  }
   const mmPerPx = state.widthMm / box.w;
   return { box, mmPerPx, heightMm: box.h * mmPerPx };
+}
+
+function strokesBounds() {
+  if (!state.strokes.length) return null;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const st of state.strokes) for (const [x, y] of st.points) (x0 = Math.min(x0, x)), (y0 = Math.min(y0, y)), (x1 = Math.max(x1, x)), (y1 = Math.max(y1, y));
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
 }
 
 function hoopSize() {
@@ -815,6 +857,13 @@ function draw() {
     drawSelectedOutline();
     drawHoop();
   } else if (v === "stitch") {
+    if (state.traceOnly && state.mode === "image" && state.photoOpacity > 0 && state.original !== null) {
+      // La photo sert de modèle, en transparence sous les traits.
+      ctx.globalAlpha = state.photoOpacity;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(state.source, 0, 0);
+      ctx.globalAlpha = 1;
+    }
     drawHoop();
     drawStitches();
     if (state.compare && state.mode === "image") drawCompare(dpr);
@@ -826,6 +875,7 @@ function draw() {
       ctx.stroke();
     }
   }
+  if (state.strokes.length || state.drawing) drawStrokesOverlay(v);
   if (state.cursor && ["brush", "eraser"].includes(state.tool) && v !== "stitch" && v !== "original") {
     ctx.beginPath();
     ctx.arc(state.cursor[0], state.cursor[1], state.brush / 2, 0, Math.PI * 2);
@@ -1118,6 +1168,7 @@ function pinchInfo() {
 }
 
 function startPinch() {
+  state.drawing = null;
   // Un trait de pinceau commencé avec le premier doigt est annulé.
   if (state.stroke) {
     const snap = state.undo.pop();
@@ -1159,6 +1210,7 @@ canvas.addEventListener("pointerdown", (e) => {
     pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
     return;
   }
+  if (state.drawMode && e.button !== 1 && !spaceDown) return drawDown(toWorld(e));
   const panning = state.tool === "pan" || e.button === 1 || spaceDown || state.view === "stitch" || state.view === "original";
   if (panning) {
     pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
@@ -1225,6 +1277,7 @@ canvas.addEventListener("pointermove", (e) => {
     render();
     return;
   }
+  if (state.drawing) return drawMove(toWorld(e));
   if (pan) {
     view.tx = pan.tx + e.clientX - pan.x;
     view.ty = pan.ty + e.clientY - pan.y;
@@ -1270,6 +1323,7 @@ function endPointer(e) {
     pan = null;
     return;
   }
+  if (state.drawing) return drawUp();
   if (pan) {
     pan = null;
     canvas.classList.remove("grabbing");
@@ -1311,6 +1365,276 @@ canvas.addEventListener(
   },
   { passive: false },
 );
+
+// ------------------------------------------------------------------ dessin (comme Paint)
+
+const ELLIPSE_STEPS = 72;
+
+function shapePoints(tool, a, b) {
+  if (tool === "line") return [a, b];
+  if (tool === "rect") return [a, [b[0], a[1]], b, [a[0], b[1]]];
+  const cx = (a[0] + b[0]) / 2;
+  const cy = (a[1] + b[1]) / 2;
+  const rx = Math.abs(b[0] - a[0]) / 2;
+  const ry = Math.abs(b[1] - a[1]) / 2;
+  return Array.from({ length: ELLIPSE_STEPS }, (_, i) => [cx + rx * Math.cos((2 * Math.PI * i) / ELLIPSE_STEPS), cy + ry * Math.sin((2 * Math.PI * i) / ELLIPSE_STEPS)]);
+}
+
+/** Distance d'un point à un trait (px). */
+function strokeDistance(p, st) {
+  const pts = st.closed ? st.points.concat([st.points[0]]) : st.points;
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1];
+    const [bx, by] = pts[i];
+    const ex = bx - ax;
+    const ey = by - ay;
+    const t = Math.max(0, Math.min(1, ((p[0] - ax) * ex + (p[1] - ay) * ey) / (ex * ex + ey * ey || 1)));
+    best = Math.min(best, Math.hypot(ax + ex * t - p[0], ay + ey * t - p[1]));
+  }
+  return best;
+}
+
+function strokeAt(p) {
+  let found = null;
+  let bd = 14 / view.s;
+  for (const st of state.strokes) {
+    const d = strokeDistance(p, st);
+    if (d < bd) (bd = d), (found = st);
+  }
+  return found;
+}
+
+function drawDown(p) {
+  if (state.dtool === "select" || state.dtool === "erase") {
+    const st = strokeAt(p);
+    if (state.dtool === "erase") {
+      if (!st) return;
+      pushHistory();
+      keepScale(() => (state.strokes = state.strokes.filter((x) => x !== st)));
+      if (state.selectedStroke === st.id) state.selectedStroke = null;
+      syncDrawBar();
+      requestCompute("stitch");
+    } else {
+      state.selectedStroke = st ? st.id : null;
+      syncDrawBar();
+    }
+    render();
+    return;
+  }
+  state.drawing = { tool: state.dtool, start: p, points: [p] };
+  render();
+}
+
+function drawMove(p) {
+  const d = state.drawing;
+  if (d.tool === "pencil") {
+    const last = d.points[d.points.length - 1];
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) > 1.5 / view.s) d.points.push(p);
+  } else {
+    d.points = shapePoints(d.tool, d.start, p);
+  }
+  render();
+}
+
+/** Garde la taille réelle des traits quand la taille du motif change. */
+function keepScale(change) {
+  const before = geometry().mmPerPx;
+  change();
+  if (state.labels) state.widthMm = geometry().box.w * before;
+}
+
+function simplifyPath(pts, eps) {
+  if (pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [i0, i1] = stack.pop();
+    let bd = -1;
+    let bi = -1;
+    const [x0, y0] = pts[i0];
+    const [x1, y1] = pts[i1];
+    const n = Math.hypot(x1 - x0, y1 - y0) || 1;
+    for (let i = i0 + 1; i < i1; i++) {
+      const d = Math.abs((y1 - y0) * pts[i][0] - (x1 - x0) * pts[i][1] + x1 * y0 - y1 * x0) / n;
+      if (d > bd) (bd = d), (bi = i);
+    }
+    if (bd > eps) (keep[bi] = 1), stack.push([i0, bi], [bi, i1]);
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+function drawUp() {
+  const d = state.drawing;
+  state.drawing = null;
+  let pts = d.points;
+  let closed = d.tool === "rect" || d.tool === "ellipse";
+  if (d.tool === "pencil") {
+    pts = simplifyPath(pts, 0.6 / Math.max(0.2, view.s));
+    // Un trait refermé sur lui-même devient une forme fermée (remplissable).
+    const span = Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]);
+    if (pts.length > 4 && span < 12 / view.s) (closed = true), pts.pop();
+  }
+  const size = pts.reduce((m, p) => Math.max(m, Math.hypot(p[0] - pts[0][0], p[1] - pts[0][1])), 0);
+  if (pts.length < 2 || size < 3 / view.s) return render();
+  const st = { id: `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, points: pts, closed, ...state.drawStyle };
+  if (st.stitch === "fill" && !closed) st.stitch = "triple";
+  pushHistory();
+  keepScale(() => state.strokes.push(st));
+  requestCompute("stitch");
+  render();
+}
+
+function selectedStroke() {
+  return state.strokes.find((s) => s.id === state.selectedStroke) || null;
+}
+
+function syncDrawBar() {
+  const st = selectedStroke();
+  const style = st || state.drawStyle;
+  $("#drawColor").value = style.color.toLowerCase();
+  $("#drawStitch").value = style.stitch;
+  $("#drawWidth").value = style.width;
+  $("#drawWidthOut").textContent = `${style.width} mm`;
+  // Place réservée (pas de saut de mise en page) : grisé hors satin.
+  $("#drawWidth").disabled = style.stitch !== "satin";
+  $("#drawWidthWrap").style.opacity = style.stitch === "satin" ? "1" : "0.4";
+  $("#drawDelete").disabled = !st;
+  $("#traceOnly").checked = state.traceOnly;
+  $("#photoOpacity").value = state.photoOpacity;
+  $$("#drawBar [data-dtool]").forEach((b) => b.classList.toggle("active", b.dataset.dtool === state.dtool));
+  $("#drawHint").textContent = st
+    ? "Trait choisi : change sa couleur, son type de fil ou sa largeur ci-dessus."
+    : "Trace avec le doigt ou la souris. Deux doigts pour zoomer. Touche « Choisir » puis un trait pour changer son fil.";
+}
+
+function setDrawMode(on) {
+  state.drawMode = on;
+  $("#btnDraw").setAttribute("aria-pressed", String(on));
+  $("#drawBar").hidden = !on;
+  canvas.dataset.draw = on ? "1" : "";
+  document.body.classList.toggle("drawing", on);
+  if (on && state.tool !== "pan") setTool("pan");
+  if (!on) state.selectedStroke = null;
+  syncDrawBar();
+  requestAnimationFrame(() => resizeCanvas());
+}
+
+$("#btnDraw").addEventListener("click", () => {
+  if (!state.labels) return toast("Importez une image, un modèle, ou touchez « Dessin libre ».", "bad");
+  setDrawMode(!state.drawMode);
+});
+$$("#drawBar [data-dtool]").forEach((b) =>
+  b.addEventListener("click", () => {
+    state.dtool = b.dataset.dtool;
+    if (state.dtool !== "select") state.selectedStroke = null;
+    syncDrawBar();
+    render();
+  }),
+);
+/** Applique un réglage au trait choisi, sinon aux prochains traits. */
+function setStrokeProp(key, value) {
+  const st = selectedStroke();
+  if (st) {
+    pushHistory();
+    st[key] = value;
+    if (st.stitch === "fill" && !st.closed) st.stitch = "triple";
+    requestCompute("stitch");
+  } else {
+    state.drawStyle = { ...state.drawStyle, [key]: value };
+  }
+  syncDrawBar();
+  render();
+}
+$("#drawColor").addEventListener("change", (e) => setStrokeProp("color", e.target.value.toUpperCase()));
+$("#drawStitch").addEventListener("change", (e) => setStrokeProp("stitch", e.target.value));
+$("#drawWidth").addEventListener("input", (e) => ($("#drawWidthOut").textContent = `${e.target.value} mm`));
+$("#drawWidth").addEventListener("change", (e) => setStrokeProp("width", Number(e.target.value)));
+$("#traceOnly").addEventListener("change", (e) => {
+  pushHistory();
+  keepScale(() => (state.traceOnly = e.target.checked));
+  requestCompute("stitch", { fit: true });
+});
+$("#photoOpacity").addEventListener("input", (e) => {
+  state.photoOpacity = Number(e.target.value);
+  render();
+});
+$("#drawDelete").addEventListener("click", () => {
+  const st = selectedStroke();
+  if (!st) return;
+  pushHistory();
+  keepScale(() => (state.strokes = state.strokes.filter((x) => x !== st)));
+  state.selectedStroke = null;
+  syncDrawBar();
+  requestCompute("stitch");
+});
+$("#drawClear").addEventListener("click", (e) => {
+  if (!state.strokes.length) return;
+  if (e.target.dataset.confirm !== "1") {
+    e.target.dataset.confirm = "1";
+    e.target.textContent = "Confirmer : tout effacer";
+    setTimeout(() => ((e.target.dataset.confirm = ""), (e.target.textContent = "Tout effacer")), 3000);
+    return;
+  }
+  pushHistory();
+  state.strokes = [];
+  state.selectedStroke = null;
+  syncDrawBar();
+  requestCompute("stitch");
+});
+
+// Page blanche pour dessiner librement (10 × 10 cm).
+$("#btnBlank").addEventListener("click", () => {
+  const c = document.createElement("canvas");
+  c.width = 800;
+  c.height = 800;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, 800, 800);
+  state.original = null;
+  loadImage(c, "dessin");
+  state.traceOnly = true;
+  setDrawMode(true);
+});
+
+/** Traits dessinés (et trait en cours) par-dessus l'aperçu. */
+function drawStrokesOverlay(v) {
+  const { mmPerPx } = geometry();
+  const list = v === "stitch" ? [] : state.strokes;
+  const live = state.drawing ? [{ points: state.drawing.points, closed: state.drawing.tool === "rect" || state.drawing.tool === "ellipse", ...state.drawStyle }] : [];
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const st of list.concat(live)) {
+    if (st.points.length < 2) continue;
+    const path = new Path2D();
+    path.moveTo(st.points[0][0], st.points[0][1]);
+    for (const p of st.points.slice(1)) path.lineTo(p[0], p[1]);
+    if (st.closed) path.closePath();
+    if (st.stitch === "fill" && st.closed) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = st.color;
+      ctx.fill(path);
+      ctx.globalAlpha = 1;
+    }
+    ctx.strokeStyle = st.color;
+    ctx.lineWidth = st.stitch === "satin" ? st.width / mmPerPx : st.stitch === "triple" ? Math.max(0.9 / mmPerPx, 2.5 / view.s) : Math.max(0.45 / mmPerPx, 1.5 / view.s);
+    ctx.stroke(path);
+  }
+  const sel = selectedStroke();
+  if (sel && state.drawMode) {
+    const path = new Path2D();
+    path.moveTo(sel.points[0][0], sel.points[0][1]);
+    for (const p of sel.points.slice(1)) path.lineTo(p[0], p[1]);
+    if (sel.closed) path.closePath();
+    ctx.setLineDash([6 / view.s, 4 / view.s]);
+    ctx.lineWidth = 2 / view.s;
+    ctx.strokeStyle = "#f3a712";
+    ctx.stroke(path);
+  }
+  ctx.restore();
+}
 
 // ------------------------------------------------------------------ calques
 
@@ -2798,6 +3122,9 @@ function projectData() {
     outlineLength: state.outlineLength,
     spacing: state.spacing,
     stitchLength: state.stitchLength,
+    strokes: state.strokes,
+    traceOnly: state.traceOnly,
+    photoOpacity: state.photoOpacity,
   };
 }
 
@@ -2852,6 +3179,9 @@ async function loadProjectData(project, id = null) {
     spacing: project.spacing || DEFAULT_LAYER.density,
     stitchLength: project.stitchLength || DEFAULT_LAYER.stitchLength,
     original: img,
+    strokes: project.strokes || [],
+    traceOnly: !!project.traceOnly,
+    photoOpacity: project.photoOpacity ?? 0.4,
     selected: project.layers[0]?.id ?? null,
     projectId: id,
     undo: [],
@@ -2976,6 +3306,7 @@ function syncSettingsUI() {
   syncStyleUI();
   syncFabricUI();
   syncPhotoUI();
+  syncDrawBar();
   $("#threadChart").value = state.threadChart;
   $("#fabric").value = state.fabric;
 }
@@ -3023,5 +3354,6 @@ try {
   }
 } catch {}
 const params = new URLSearchParams(location.search);
+if (params.has("debug")) window.__ft = { state, view };
 if (params.get("galerie")) openFromGallery(params.get("galerie"));
 else if (params.has("exemple") || window.FILTRACE_AUTOSAMPLE) loadSample();

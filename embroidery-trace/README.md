@@ -79,6 +79,7 @@ différente, remplacez-la dans ces fichiers.
 | Projet | **Mes projets** : sauvegarde dans le navigateur (IndexedDB) avec vignette ; téléchargement / import `.filtrace.json` |
 | Guide | ordre des fils étape par étape, fils à couper par couleur, consignes d'appliqué |
 | Nuanciers | Brother, Janome, Husqvarna Viking (Madeira / Gunold non inclus : pas de table de couleurs fiable) |
+| Dessin (comme Paint) | **✏ Dessiner** : crayon, ligne, rectangle, cercle, choisir / effacer un trait ; pour chaque trait couleur et **type de fil** (point droit, triple, satin avec largeur, remplissage des formes fermées), modifiables ensuite ; **Calquer la photo** (la photo sert de modèle, seuls les traits sont brodés) ; **Dessin libre** sur page blanche |
 | Expérience | **mode simple** (3 étapes) / avancé, **visite guidée**, **9 modèles**, **mode sombre**, **avant / après**, curseurs appliqués en direct, calculs dans un **Worker** avec barre de progression, annuler / rétablir sur tous les réglages |
 | Contrôle | **alertes** (points trop longs, zones trop denses, texte trop petit, hors cadre), **Mes bobines** (n'utiliser que ses fils), style **dessin au trait** pour les photos, outil **Déplacer**, textes modifiables |
 | Langues | français et **anglais** (bouton EN/FR, `?lang=en`) |

@@ -352,3 +352,23 @@ export function borderSatinRuns(loops, { width = 2.5, density = 0.4 } = {}) {
   }
   return runs;
 }
+
+/**
+ * Satin le long d'un tracé dessiné (ligne, courbe ou forme fermée) :
+ * zigzag de largeur `width` mm centré sur le trait, avec une sous-couche
+ * au centre cousue à l'aller et le satin au retour (sans saut).
+ */
+export function satinPath(points, { width = 3, density = 0.4, closed = false, underlay = true } = {}) {
+  if (points.length < 2) return [];
+  const base = closed ? points.concat([points[0]]) : points;
+  const path = resample(base, density / 2);
+  if (path.length < 3) return [];
+  const zig = path.map((q, i) => {
+    const t = tangentAt(path, i);
+    const s = i % 2 ? 1 : -1;
+    return [q[0] - (t[1] * s * width) / 2, q[1] + (t[0] * s * width) / 2];
+  });
+  if (!underlay || width < 1.2) return [zig];
+  const walk = resample(base, 2);
+  return [walk.concat(zig.reverse())];
+}
