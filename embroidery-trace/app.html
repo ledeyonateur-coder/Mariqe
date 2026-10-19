@@ -67,6 +67,9 @@
         <div class="row-buttons">
           <button class="btn small ghost" id="btnBlank" title="Page blanche pour dessiner librement">✏ Dessin libre</button>
         </div>
+        <div class="row-buttons" data-hide-file>
+          <button class="btn small ghost" id="btnBgRemove" disabled title="Garde la personne, l'animal ou l'objet et efface le fond">✨ Retirer le fond</button>
+        </div>
         <div class="row-buttons">
           <button class="btn small ghost" id="btnText" title="Ajouter un prénom, un mot…">Aa Texte</button>
           <label class="btn small ghost" title="Ouvrir un fichier DST, EXP, JEF, PES ou VP3 pour le voir, le redimensionner ou le convertir">
@@ -293,6 +296,7 @@
         <label class="check small"><input type="checkbox" id="showJumps" /> Sauts</label>
         <label class="fabric" title="Couleur du tissu">Tissu <input type="color" id="fabric" value="#f4efe6" /></label>
         <button class="btn small ghost" id="btnGuide" disabled title="Ordre des fils, étape par étape">🧵 Guide</button>
+        <button class="btn small ghost" id="btnAtelier" disabled title="Plein écran à côté de la machine, couleur par couleur">🪡 Mode atelier</button>
       </div>
     </section>
 
@@ -333,6 +337,7 @@
         <button type="button" class="format" data-extra="svg"><b>SVG</b><span>Calques vectoriels (Inkscape / Ink/Stitch)</span></button>
         <button type="button" class="format" data-extra="png"><b>PNG</b><span>Aperçu réaliste des points</span></button>
         <button type="button" class="format" data-extra="sheet"><b>Fiche</b><span>Ordre des fils à imprimer</span></button>
+        <button type="button" class="format" data-extra="gabarit"><b>Gabarit</b><span>Taille réelle à imprimer, pour placer le motif</span></button>
         <button type="button" class="format" data-extra="zip"><b>ZIP</b><span>Tous les formats d'un coup</span></button>
       </div>
       <p class="hint small" id="exportSummary"></p>
@@ -458,10 +463,32 @@
     <p class="hint" id="guideIntro"></p>
     <ol class="guide-list" id="guideList"></ol>
     <div class="crop-actions">
+      <button type="button" class="btn ghost" id="guideAtelier">🪡 Mode atelier</button>
       <button type="button" class="btn ghost" id="guidePrev">← Étape précédente</button>
       <button type="button" class="btn primary" id="guideNext">Étape suivante →</button>
     </div>
   </dialog>
+
+  <!-- Mode atelier -->
+  <div class="atelier" id="atelier" hidden role="dialog" aria-modal="true" aria-label="Mode atelier">
+    <div class="atelier-head">
+      <span id="atelierStep">Étape 1 / 1</span>
+      <button class="btn ghost small" id="atelierClose" aria-label="Fermer">✕ Fermer</button>
+    </div>
+    <div class="atelier-body">
+      <canvas id="atelierCanvas" aria-label="Ce qui est brodé jusqu'ici"></canvas>
+      <div class="atelier-info">
+        <div class="atelier-thread"><span class="atelier-sw" id="atelierSw"></span><div><b id="atelierName"></b><small id="atelierHex"></small></div></div>
+        <div class="atelier-refs" id="atelierRefs"></div>
+        <p class="atelier-note" id="atelierNote"></p>
+        <p class="atelier-stats" id="atelierStats"></p>
+      </div>
+    </div>
+    <div class="atelier-nav">
+      <button class="btn ghost" id="atelierPrev">◀ Précédente</button>
+      <button class="btn primary" id="atelierNext">Couleur suivante ▶</button>
+    </div>
+  </div>
 
   <!-- Onglets sur téléphone -->
   <nav class="mobile-tabs" id="mobileTabs" aria-label="Sections">

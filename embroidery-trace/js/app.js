@@ -379,6 +379,7 @@ function loadImage(img, name, { widthMm = null } = {}) {
   document.body.classList.add("has-image");
   $("#emptyState").hidden = true;
   $("#btnCrop").disabled = !state.original;
+  $("#btnBgRemove").disabled = false;
   runAnalyze({ fitSize: true });
   fitView();
 }
@@ -454,6 +455,50 @@ function openFilePattern(p, name, widthMm = null) {
 $("#embInput").addEventListener("change", (e) => {
   if (e.target.files[0]) loadEmbroideryFile(e.target.files[0]);
   e.target.value = "";
+});
+
+// ------------------------------------------------------------------ retirer le fond
+
+$("#btnBgRemove").addEventListener("click", async () => {
+  if (!state.source || state.mode === "file" || !state.rgbaBase) return;
+  const gen = imageGen;
+  const btn = $("#btnBgRemove");
+  btn.disabled = true;
+  $("#busyLabel").textContent = "Recherche du sujet (personne, animal…)";
+  $("#busyBar").style.width = "35%";
+  busy(true);
+  let res = null;
+  try {
+    const { findSubject } = await import("./bgremove.js");
+    res = await findSubject(state.source, state.rgbaBase);
+  } catch (e) {
+    console.warn(e);
+  }
+  busy(false);
+  btn.disabled = false;
+  if (gen !== imageGen) return;
+  if (!res) {
+    toast("Aucun sujet net trouvé. Essayez de recadrer la photo au plus près, ou une photo sur fond uni.", "bad");
+    return;
+  }
+  pushHistory();
+  const { w, h } = state;
+  const data = new Uint8ClampedArray(state.rgbaBase);
+  for (let p = 0; p < w * h; p++) if (!res.mask[p]) data[p * 4 + 3] = 0;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d", { willReadFrequently: true }).putImageData(new ImageData(data, w, h), 0, 0);
+  state.source = c;
+  state.rgbaBase = data;
+  state.rgba = adjustPixels(state.rgbaBase, state.photo);
+  runAnalyze();
+  toast(
+    res.method === "ia"
+      ? "Fond retiré : le sujet a été reconnu automatiquement. Annuler (↶) pour revenir en arrière."
+      : "Fond retiré d'après ses couleurs. Annuler (↶) pour revenir en arrière.",
+    "ok",
+  );
 });
 
 // ------------------------------------------------------------------ retouche photo
@@ -1982,6 +2027,7 @@ function refreshUI() {
   $("#btnQuick").disabled = $("#btnExport").disabled;
   $("#btnSaveProject").disabled = !state.labels;
   $("#btnGuide").disabled = !state.pattern || !state.pattern.stats.stitchCount;
+  $("#btnAtelier").disabled = $("#btnGuide").disabled;
   const total = state.pattern ? state.pattern.stitches.length : 0;
   $("#progress").max = total;
   $("#progress").value = state.progress;
@@ -2917,6 +2963,147 @@ $("#guideList").addEventListener("click", (e) => {
   renderGuide();
 });
 
+// ------------------------------------------------------------------ mode atelier
+
+// Plein écran à côté de la machine : une couleur à la fois, en très grand,
+// et l'écran reste allumé.
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator && document.visibilityState === "visible") wakeLock = await navigator.wakeLock.request("screen");
+    else if (!on && wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch {
+    // Pas grave : l'écran pourra simplement se mettre en veille.
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (!$("#atelier").hidden && document.visibilityState === "visible") keepAwake(true);
+});
+
+function openAtelier(step = 0) {
+  if (!state.pattern || !state.pattern.stats.stitchCount) return;
+  if ($("#guideDialog").open) $("#guideDialog").close();
+  stopPlay();
+  state.guideStep = Math.max(0, Math.min(step, guideBlocks().length - 1));
+  $("#atelier").hidden = false;
+  document.body.style.overflow = "hidden";
+  keepAwake(true);
+  renderAtelier();
+}
+
+function closeAtelier() {
+  $("#atelier").hidden = true;
+  document.body.style.overflow = "";
+  keepAwake(false);
+  showGuideStep(state.guideStep);
+}
+
+function renderAtelier() {
+  const blocks = guideBlocks();
+  const i = Math.min(state.guideStep, blocks.length - 1);
+  const b = blocks[i];
+  if (!b) return;
+  const m = MACHINES[state.machine];
+  const color = b.thread.color;
+  $("#atelierStep").textContent = `Étape ${i + 1} / ${blocks.length}`;
+  $("#atelierSw").style.background = color;
+  $("#atelierName").textContent = b.thread.name || threadLabel(color);
+  $("#atelierHex").textContent = color;
+  const bro = nearestThreadIndex(color, PEC_THREADS);
+  const jan = nearestThreadIndex(color, JEF_THREADS);
+  const hus = nearestInChart(color, "husqvarna");
+  $("#atelierRefs").innerHTML =
+    `<span>Brother ${bro} · ${PEC_THREADS[bro][1]}</span><span>Janome ${jan} · ${JEF_THREADS[jan][1]}</span>` +
+    `<span>Husqvarna ${hus.ref} · ${hus.name}</span>`;
+  const same = i > 0 && blocks[i - 1].thread.color === color;
+  const note = b.step ? STEP_NOTES[b.step] : i === 0 ? "Enfilez ce fil, puis lancez la machine." : same ? "Même fil : relancez simplement la machine." : "Changez de fil, puis relancez la machine.";
+  $("#atelierNote").textContent = note;
+  if (m.trims === false && b.trims > 1) {
+    const extra = document.createElement("span");
+    extra.textContent = `Ensuite, coupez ${b.trims - 1} fil(s) de saut.`;
+    $("#atelierNote").append(" ", extra);
+  }
+  $("#atelierStats").textContent = `${fmt(b.stats?.stitches || 0)} points dans cette couleur`;
+  $("#atelierPrev").disabled = i <= 0;
+  $("#atelierNext").textContent = i >= blocks.length - 1 ? "Terminé ✓" : "Couleur suivante ▶";
+  drawAtelier(blocks, i);
+}
+
+function drawAtelier(blocks, cur) {
+  const c = $("#atelierCanvas");
+  const r = c.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.max(1, Math.round(r.width * dpr));
+  c.height = Math.max(1, Math.round(r.height * dpr));
+  const g = c.getContext("2d");
+  g.fillStyle = state.fabric;
+  g.fillRect(0, 0, c.width, c.height);
+  const st = state.pattern.stitches;
+  const [x0, y0, x1, y1] = patternBounds(st.filter((s) => s[2] === STITCH));
+  const k = Math.min((c.width * 0.9) / Math.max(1, x1 - x0), (c.height * 0.9) / Math.max(1, y1 - y0));
+  const ox = c.width / 2 - ((x0 + x1) / 2) * k;
+  const oy = c.height / 2 - ((y0 + y1) / 2) * k;
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  // Les couleurs à venir d'abord (pâles), puis celles faites, puis l'actuelle par-dessus.
+  const order = blocks.map((_, n) => n).filter((n) => n > cur).concat(blocks.map((_, n) => n).filter((n) => n < cur), [cur]);
+  for (const n of order) {
+    const start = n > 0 ? blocks[n - 1].end : 0;
+    const path = new Path2D();
+    let prev = null;
+    for (let j = start; j < blocks[n].end; j++) {
+      const [x, y, cmd] = st[j];
+      const px = x * k + ox;
+      const py = y * k + oy;
+      if (cmd === STITCH && prev) path.lineTo(px, py);
+      else if (cmd === STITCH) path.moveTo(px, py);
+      prev = cmd === STITCH ? [px, py] : null;
+    }
+    g.globalAlpha = n > cur ? 0.13 : 1;
+    if (n === cur) {
+      g.strokeStyle = "rgba(216,67,46,.55)";
+      g.lineWidth = Math.max(4 * dpr, 4.2 * k);
+      g.stroke(path);
+    }
+    g.strokeStyle = blocks[n].thread.color;
+    g.lineWidth = Math.max(1 * dpr, 4.2 * k);
+    g.stroke(path);
+  }
+  g.globalAlpha = 1;
+}
+
+function atelierMove(d) {
+  const n = guideBlocks().length;
+  if (d > 0 && state.guideStep >= n - 1) {
+    closeAtelier();
+    toast("Broderie terminée, bravo ! 🎉", "ok");
+    return;
+  }
+  state.guideStep = Math.max(0, Math.min(n - 1, state.guideStep + d));
+  renderAtelier();
+}
+
+$("#btnAtelier").addEventListener("click", () => openAtelier(0));
+$("#guideAtelier").addEventListener("click", () => openAtelier(state.guideStep));
+$("#atelierClose").addEventListener("click", closeAtelier);
+$("#atelierPrev").addEventListener("click", () => atelierMove(-1));
+$("#atelierNext").addEventListener("click", () => atelierMove(1));
+document.addEventListener("keydown", (e) => {
+  if ($("#atelier").hidden) return;
+  if (e.key === "ArrowRight" || e.key === " ") atelierMove(1);
+  else if (e.key === "ArrowLeft") atelierMove(-1);
+  else if (e.key === "Escape") closeAtelier();
+  else return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+window.addEventListener("resize", () => {
+  if (!$("#atelier").hidden) renderAtelier();
+});
+
 // ------------------------------------------------------------------ onglets téléphone
 
 function setMobileTab(tab) {
@@ -3016,22 +3203,115 @@ dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}dt{color:#6
 </body></html>`;
 }
 
+/**
+ * Gabarit à imprimer à 100 % : le motif en taille réelle avec le cadre, la
+ * croix du centre et le haut, pour le placer sur le vêtement avant d'encadrer.
+ * Découpé en pages A4 s'il est plus grand.
+ */
+function gabaritHTML() {
+  const p = state.pattern;
+  const name = designName();
+  const st = p.stitches;
+  const [bx0, by0, bx1, by1] = patternBounds(st.filter((s) => s[2] === STITCH));
+  const cx = (bx0 + bx1) / 2;
+  const cy = (by0 + by1) / 2;
+  const dw = (bx1 - bx0) / 10;
+  const dh = (by1 - by0) / 10;
+  // Points en mm, centrés sur le milieu du motif (comme la machine).
+  const paths = [];
+  let ci = 0;
+  let d = "";
+  let pen = false;
+  const flush = () => {
+    if (d) paths.push({ color: p.threads[ci]?.color || "#000", d });
+    d = "";
+    pen = false;
+  };
+  for (const [x, y, c] of st) {
+    if (c === COLOR_CHANGE) {
+      flush();
+      ci++;
+    } else if (c === STITCH) {
+      d += `${pen ? "L" : "M"}${((x - cx) / 10).toFixed(1)} ${((y - cy) / 10).toFixed(1)}`;
+      pen = true;
+    } else pen = false;
+  }
+  flush();
+  const ink = (hex) => {
+    const [r, g, b] = hexToRgb(hex);
+    return 0.299 * r + 0.587 * g + 0.114 * b > 215 ? "#9a9a9a" : hex;
+  };
+  let hoop = hoopSize();
+  if (hoop && (dw > dh) !== (hoop[0] > hoop[1])) hoop = [hoop[1], hoop[0]];
+  const halfW = Math.max(dw, hoop ? hoop[0] : 0) / 2 + 6;
+  const halfH = Math.max(dh, hoop ? hoop[1] : 0) / 2 + 10;
+  const PW = 190;
+  const PH = 247;
+  const cols = Math.ceil((halfW * 2) / PW);
+  const rows = Math.ceil((halfH * 2) / PH);
+  const left = (-cols * PW) / 2;
+  const top = (-rows * PH) / 2;
+  const ticks = [];
+  for (let v = 10; v < Math.max(halfW, halfH); v += 10) {
+    const s = v % 50 === 0 ? 3 : 1.6;
+    if (v < halfW) ticks.push(`M${v} ${-s}V${s}M${-v} ${-s}V${s}`);
+    if (v < halfH) ticks.push(`M${-s} ${v}H${s}M${-s} ${-v}H${s}`);
+  }
+  const art =
+    (hoop
+      ? `<rect x="${-hoop[0] / 2}" y="${-hoop[1] / 2}" width="${hoop[0]}" height="${hoop[1]}" rx="4" fill="none" stroke="#d8432e" stroke-width=".4" stroke-dasharray="3 2"/>` +
+        `<text x="${-hoop[0] / 2 + 2}" y="${-hoop[1] / 2 - 1.5}" font-size="3.2" fill="#d8432e">${t("Zone de broderie")} ${hoop[0]} × ${hoop[1]} mm</text>`
+      : "") +
+    paths.map((q) => `<path d="${q.d}" fill="none" stroke="${ink(q.color)}" stroke-width=".3" stroke-linejoin="round"/>`).join("") +
+    `<path d="M${-halfW} 0H${halfW}M0 ${-halfH}V${halfH}" stroke="#1d1a16" stroke-width=".25" stroke-dasharray="1.5 1.5"/>` +
+    `<path d="${ticks.join("")}" stroke="#1d1a16" stroke-width=".25"/>` +
+    `<circle r="2.5" fill="none" stroke="#1d1a16" stroke-width=".35"/>` +
+    `<text x="0" y="${-halfH + 7}" font-size="5" font-weight="700" text-anchor="middle" fill="#1d1a16">↑ ${t("HAUT")}</text>`;
+  const pages = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const label = rows * cols > 1 ? ` — ${t("page")} ${r * cols + c + 1}/${rows * cols} (${t("ligne")} ${r + 1}, ${t("colonne")} ${c + 1})` : "";
+      // Repères d'angle pour recoller les pages bord à bord.
+      const vx = left + c * PW;
+      const vy = top + r * PH;
+      const corner = (x, y) => `M${x - 4} ${y}H${x + 4}M${x} ${y - 4}V${y + 4}`;
+      const marks = rows * cols > 1 ? `<path d="${corner(vx, vy) + corner(vx + PW, vy) + corner(vx, vy + PH) + corner(vx + PW, vy + PH)}" stroke="#888" stroke-width=".3"/>` : "";
+      pages.push(`<section class="page"><header><div><b>${name}</b> · ${fmt(dw, 1)} × ${fmt(dh, 1)} mm${label}<br>
+<small>${t("Imprimez à 100 % (taille réelle, sans « ajuster à la page »). Le carré doit mesurer 2 cm.")}</small></div><div class="cal">2 cm</div></header>
+<svg xmlns="http://www.w3.org/2000/svg" width="${PW}mm" height="${PH}mm" viewBox="${vx} ${vy} ${PW} ${PH}">${art}${marks}</svg></section>`);
+    }
+  }
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${t("Gabarit")} — ${name}</title>
+<style>@page{size:A4 portrait;margin:10mm}body{margin:0;font:12px/1.35 Inter,system-ui,sans-serif;color:#1d1a16;background:#eee}
+.page{width:190mm;height:277mm;margin:10mm auto;background:#fff;overflow:hidden;page-break-after:always;break-after:page}
+.page:last-child{page-break-after:auto;break-after:auto}
+header{height:30mm;display:flex;justify-content:space-between;align-items:flex-start;gap:6mm;box-sizing:border-box;padding-top:2mm}
+.cal{flex:none;width:20mm;height:20mm;border:.3mm solid #1d1a16;box-sizing:border-box;display:grid;place-items:center;font-size:10px}
+svg{display:block}.tools{text-align:center;padding:12px}button{font:inherit;padding:10px 16px}
+@media print{body{background:#fff}.page{margin:0}.tools{display:none}}</style></head><body>
+<div class="tools"><button onclick="print()">${t("Imprimer")}</button></div>${pages.join("\n")}</body></html>`;
+}
+
+async function openPrintable(html, fileName) {
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const win = (await hostedDownloads) ? null : window.open(url, "_blank");
+  if (!win) download(html, fileName, "text/html");
+}
+
 async function exportExtra(kind) {
   const name = designName();
   if (kind === "svg" && state.mode === "file") toast("Le SVG n'est pas disponible pour un fichier de broderie importé.", "bad");
   else if (kind === "svg") download(exportSVG(), `${name}.svg`, "image/svg+xml");
   else if (kind === "png") download(await canvasToBytes(renderPNG()), `${name}.png`, "image/png");
-  else if (kind === "sheet") {
-    const html = sheetHTML(renderPNG(6).toDataURL("image/png"));
-    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-    const win = (await hostedDownloads) ? null : window.open(url, "_blank");
-    if (!win) download(html, `${name}-fiche.html`, "text/html");
-  } else if (kind === "zip") {
+  else if (kind === "sheet") openPrintable(sheetHTML(renderPNG(6).toDataURL("image/png")), `${name}-fiche.html`);
+  else if (kind === "gabarit") openPrintable(gabaritHTML(), `${name}-gabarit.html`);
+  else if (kind === "zip") {
     const files = Object.keys(FORMATS).map((ext) => ({ name: `${name}.${ext}`, data: writeFormat(ext, state.pattern, name) }));
     files.push({ name: `${name}.svg`, data: exportSVG() });
     const png = renderPNG(6);
     files.push({ name: `${name}.png`, data: await canvasToBytes(png) });
     files.push({ name: `${name}-fiche.html`, data: new TextEncoder().encode(sheetHTML(png.toDataURL("image/png"))) });
+    files.push({ name: `${name}-gabarit.html`, data: new TextEncoder().encode(gabaritHTML()) });
     download(makeZip(files), `${name}.zip`, "application/zip");
   }
 }

@@ -71,13 +71,14 @@ différente, remplacez-la dans ces fichiers.
 | Édition manuelle | pinceau, gomme, pot de peinture, pipette, taille du pinceau, nouveau calque, fusion de calques, suppression, ordre de broderie, couleur libre ou nuancier Brother, masquer ; annuler / rétablir (Ctrl+Z / Ctrl+Maj+Z) |
 | Aperçu | vues Image / Couleurs / Vecteurs / Points, zoom et déplacement, rendu réaliste du fil sur la couleur du tissu, sauts affichables, **simulation animée** de la broderie |
 | Tissu | préréglages coton, jean, t-shirt, éponge, casquette, tissu fin (densité, compensation, sous-couche) + conseil de stabilisateur |
-| Photo | luminosité, contraste, saturation ; baguette pour retirer une zone (fond) d'un clic |
+| Photo | luminosité, contraste, saturation ; baguette pour retirer une zone (fond) d'un clic ; **✨ Retirer le fond** automatique : une IA locale (MediaPipe DeepLab v3, dans `vendor/`) garde la personne ou l'animal, sinon détourage par les couleurs du bord (fonds unis) — tout se passe dans le navigateur |
 | Espacement | **espacement entre les fils** et longueur des points pour tout le motif (puis réglables calque par calque) ; longueur des points du contour en mode contours |
 | Fichier | type de fichier au choix (EXP, PES, JEF, DST, VP3), format recommandé selon la machine |
 | Taille | **barre de taille sous l'aperçu** (5 / 7 / 10 / 15 cm, max du cadre, curseur) ; largeur / hauteur en mm, cadres 4×4 à 9,5×14, alerte si le motif dépasse, bouton « Ajuster au cadre » |
 | Export | **DST, PES, JEF, EXP, VP3**, SVG en calques (Inkscape / Ink/Stitch), PNG d'aperçu, fiche couleurs imprimable (fils Brother + Janome, points, métrage), ZIP de tout |
 | Projet | **Mes projets** : sauvegarde dans le navigateur (IndexedDB) avec vignette ; téléchargement / import `.filtrace.json` |
-| Guide | ordre des fils étape par étape, fils à couper par couleur, consignes d'appliqué |
+| Guide | ordre des fils étape par étape, fils à couper par couleur, consignes d'appliqué ; **🪡 Mode atelier** : plein écran à côté de la machine, une couleur à la fois en très grand (références Brother / Janome / Husqvarna, fils à couper), boutons géants et flèches du clavier, l'écran reste allumé |
+| Gabarit | **gabarit à imprimer en taille réelle** (export « Gabarit ») : motif, zone du cadre, croix du centre graduée, flèche du haut et carré de contrôle de 2 cm ; découpé en pages A4 si besoin |
 | Nuanciers | Brother, Janome, Husqvarna Viking (Madeira / Gunold non inclus : pas de table de couleurs fiable) |
 | Dessin (comme Paint) | **✏ Dessiner** : crayon, ligne, rectangle, cercle, choisir / effacer un trait ; pour chaque trait couleur et **type de fil** (point droit, triple, satin avec largeur, remplissage des formes fermées), modifiables ensuite ; **Calquer la photo** (la photo sert de modèle, seuls les traits sont brodés) ; **Dessin libre** sur page blanche |
 | Expérience | **mode simple** (3 étapes) / avancé, **visite guidée**, **9 modèles**, **mode sombre**, **avant / après**, curseurs appliqués en direct, calculs dans un **Worker** avec barre de progression, annuler / rétablir sur tous les réglages |
@@ -129,6 +130,8 @@ js/core/stitch.js        remplissage tatami, satin, point droit, appliqué, dép
 js/core/satin.js         satin en colonne (squelette) et bordure satin
 js/formats/readers.js    lecture DST / EXP / JEF / PES / VP3
 js/fabrics.js, photo.js, text.js, projects.js   tissus, retouche, texte, Mes projets
+js/bgremove.js           retirer le fond (IA locale, sinon couleurs du bord)
+vendor/mediapipe/        moteur et modèle de segmentation (Apache-2.0), chargés à la demande
 js/core/pipeline.js      enchaînement image -> calques -> points
 js/core/threads.js       nuanciers Brother (PEC) et Janome (JEF)
 js/core/zip.js           archive ZIP
