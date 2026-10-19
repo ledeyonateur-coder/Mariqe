@@ -5,6 +5,7 @@ import { quantize, detectBackground, mergeSmallRegions, smoothLabels } from "./q
 import { vectorizeLayer } from "./trace.js";
 import { layerRuns, buildPattern, appliqueSteps, pathRuns, DEFAULT_LAYER } from "./stitch.js";
 import { satinPath } from "./satin.js";
+import { makeGrid, rasterize, erode, findPath } from "./underpath.js";
 
 export const APPLIQUE_LABELS = {
   placement: "ligne de placement",
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS = {
   smoothing: 1, // passes du filtre de mode
   curve: 1, // lissage des contours (Chaikin)
   detail: 0.7, // tolérance de simplification (px)
+  minAreaMm: 6, // surface min. d'un îlot une fois brodé (mm²), si mmPerPx est connu
 };
 
 /** Étape 1 : réduction des couleurs + nettoyage. */
@@ -85,6 +87,20 @@ function splitEnclosed(labels, w, h, value, into) {
 /** Étape 2 : contours vectoriels de chaque calque (en pixels). */
 export function vectorizeAll(labels, w, h, layers, settings = {}, onProgress = null) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
+  // Îlots trop petits pour être brodés proprement à la taille choisie
+  // (surface en mm²) : fondus dans la couleur voisine, sur une copie, pour
+  // qu'ils reviennent si le motif est agrandi. Chaque îlot évité, c'est un
+  // saut et souvent un fil à couper en moins.
+  const minPx = s.mmPerPx && s.minAreaMm ? Math.min(s.minAreaMm / (s.mmPerPx * s.mmPerPx), (w * h) / 200) : 0;
+  if (minPx > s.cleanup) {
+    const orig = labels;
+    labels = new Int16Array(labels);
+    mergeSmallRegions(labels, w, h, minPx);
+    mergeSmallRegions(labels, w, h, minPx);
+    // Les textes gardent tous leurs détails (accents, points des i).
+    const keep = new Set(layers.filter((L) => L.text).map((L) => L.id));
+    if (keep.size) for (let i = 0; i < labels.length; i++) if (keep.has(orig[i])) labels[i] = orig[i];
+  }
   const out = new Map();
   layers.forEach((L, i) => {
     out.set(L.id, vectorizeLayer(labels, w, h, L.id, { smoothing: s.curve, simplify: s.detail }));
@@ -102,7 +118,7 @@ export function vectorizeAll(labels, w, h, layers, settings = {}, onProgress = n
  *                       couleur par calque) ou "outline1" (contours d'un seul fil)
  */
 export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
-  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, outlineLength = 2.5, onProgress = null, strokes = [], traceOnly = false, ...buildOptions } = options;
+  const { style = "fill", outlineColor = "#1D1A16", outlineTriple = false, outlineLength = 2.5, onProgress = null, strokes = [], traceOnly = false, before = [], after = [], ...buildOptions } = options;
   // Calquer la photo : seule la main de l'utilisateur est brodée, pas l'image.
   if (traceOnly) layers = [];
   const visible = layers.filter((L) => L.visible && L.type !== "none");
@@ -134,11 +150,59 @@ export function stitchDesign(layers, vectors, mmPerPx, options = {}) {
     const runs = orderRuns(prepared.flatMap((L) => L.runs));
     prepared = [{ color: outlineColor, name: "Contour", id: prepared[0].id, runs }];
   }
+  if (!outline && buildOptions.travel !== false) addHiddenTravel(prepared, layers);
   prepared.push(...strokeLayers(strokes));
+  // Calques déjà en points (mm), cousus avant / après : repères d'alignement.
+  prepared = [...before, ...prepared, ...after].filter((L) => L.runs.length);
   const pattern = buildPattern(prepared, buildOptions);
   pattern.layerIds = prepared.map((L) => L.id);
   pattern.steps = prepared.map((L) => L.step || null);
   return pattern;
+}
+
+// Types de point qui recouvrent la surface (et cachent un déplacement dessous).
+const COVERING = new Set(["fill", "satin", "auto"]);
+
+/**
+ * Chaque calque peut cheminer à l'intérieur de sa propre forme ou sous les
+ * couleurs brodées après lui : bien moins de sauts et de fils à couper.
+ */
+function addHiddenTravel(prepared, layers) {
+  const typeOf = new Map(layers.map((L) => [L.id, L.type]));
+  const grid = makeGrid(prepared.map((L) => L.loops || []));
+  if (!grid) return;
+  const n = grid.gw * grid.gh;
+  // Zone recouverte par les calques suivants, du dernier au premier.
+  let after = new Uint8Array(n);
+  const coverAfter = new Array(prepared.length);
+  const own = new Map();
+  for (let i = prepared.length - 1; i >= 0; i--) {
+    coverAfter[i] = after;
+    const L = prepared[i];
+    if (!L.loops?.length) continue;
+    if (!own.has(L.id)) own.set(L.id, erode(rasterize(L.loops, grid, new Uint8Array(n)), grid, 1));
+    if (COVERING.has(typeOf.get(L.id)) && !L.step) {
+      const next = new Uint8Array(after);
+      const cover = erode(own.get(L.id), grid, 1);
+      for (let k = 0; k < n; k++) if (cover[k]) next[k] = 1;
+      after = next;
+    }
+  }
+  prepared.forEach((L, i) => {
+    // Appliqué : rien ne doit traverser le tissu posé entre deux étapes.
+    if (L.step || !L.loops?.length) return;
+    const ownMask = own.get(L.id);
+    const later = coverAfter[i];
+    let mask = null;
+    L.travel = (a, b) => {
+      if (!mask) {
+        mask = new Uint8Array(n);
+        for (let k = 0; k < n; k++) mask[k] = ownMask[k] | later[k];
+      }
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      return findPath(mask, grid, a, b, { maxLen: Math.max(40, d * 3) });
+    };
+  });
 }
 
 /**

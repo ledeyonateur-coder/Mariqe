@@ -526,3 +526,31 @@ body:not(.simple) [data-simple-only] { display: none !important; }
   .atelier-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
   .atelier-note { font-size: 17px; }
 }
+
+/* ------------------------------------------------------------------ brouillon */
+.draft-card { display: grid; grid-template-columns: 64px 1fr; gap: 10px 12px; align-items: center; text-align: left; margin: 16px auto 0; max-width: 360px; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); pointer-events: auto; }
+.draft-card img { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; background: var(--surface-2); }
+.draft-card b { display: block; color: var(--ink); }
+.draft-card small { color: var(--muted); }
+.draft-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ------------------------------------------------------------------ grand motif en plusieurs fois */
+.dialog.wide { width: min(720px, calc(100vw - 32px)); }
+.split-canvas { display: block; width: 100%; height: 260px; border-radius: 12px; background: var(--stage); margin: 8px 0 12px; }
+.split-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.split-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.split-list li b { flex: 1 1 160px; }
+.split-list li small { display: block; color: var(--muted); font-weight: 400; }
+.split-help { margin-top: 12px; }
+.split-help ol { padding-left: 20px; line-height: 1.5; }
+
+/* ------------------------------------------------------------------ modèles : catégories et lettre décorée */
+.tpl-cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.tpl-cats button { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 999px; padding: 6px 12px; font: 600 13px/1 var(--font); cursor: pointer; }
+.tpl-cats button.active { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.template-grid { max-height: 46vh; overflow: auto; }
+.template-grid small { color: var(--muted); font-weight: 500; }
+.monogram { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.monogram summary { font-weight: 700; cursor: pointer; }
+.mono-colors { display: flex; gap: 8px; }
+.mono-preview { display: block; width: 180px; height: 180px; margin: 8px auto 0; background: #fff; border-radius: 12px; border: 1px solid var(--line); }

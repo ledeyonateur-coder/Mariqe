@@ -3,17 +3,18 @@
 // localement dans le navigateur : l'image n'est envoyée nulle part.
 
 import { contentBounds, DEFAULT_SETTINGS, APPLIQUE_LABELS } from "./core/pipeline.js";
-import { STITCH, JUMP, TRIM, COLOR_CHANGE, STITCH_TYPES, DEFAULT_LAYER, effectiveAngle, patternBounds, scalePattern, patternStats } from "./core/stitch.js";
+import { STITCH, JUMP, TRIM, COLOR_CHANGE, STITCH_TYPES, DEFAULT_LAYER, effectiveAngle, patternBounds, scalePattern, patternStats, combinePatterns } from "./core/stitch.js";
 import { PEC_THREADS, JEF_THREADS, THREAD_CHARTS, nearestThreadIndex, nearestInChart, hexToRgb, rgbToHex } from "./core/threads.js";
 import { loopsToPath } from "./core/trace.js";
 import { FORMATS, writeFormat } from "./formats/writers.js";
 import { makeZip } from "./core/zip.js";
+import { planPieces, clipPolygon, clipPolyline, sharedMarks, crossRuns } from "./core/split.js";
 import { engine } from "./engine.js";
 import { MACHINES, DEFAULT_MACHINE, machineFileName } from "./machines.js";
 import { openCropper } from "./crop.js";
 import { readEmbroidery } from "./formats/readers.js";
 import { FABRICS } from "./fabrics.js";
-import { adjustPixels, sketchPixels } from "./photo.js";
+import { adjustPixels, sketchPixels, illustratePixels } from "./photo.js";
 import { checkPattern } from "./core/checks.js";
 import { newSyncCode, normalizeCode, pushProject, pullProjects, galleryGet, galleryShare, b64, unb64 } from "./cloud.js";
 import { readDST } from "./formats/readers.js";
@@ -62,6 +63,7 @@ const state = {
   projectId: null,
   guideStep: 0,
   pendingWidthMm: null,
+  pendingLongMm: null, // modèles : taille du côté le plus long (mm)
   pendingTextOnly: false,
   compare: false,
   // Dessin à la main (comme Paint) : traits brodés par-dessus la photo.
@@ -347,6 +349,7 @@ $("#btnCrop").addEventListener("click", async () => {
 function loadImage(img, name, { widthMm = null } = {}) {
   imageGen++;
   state.strokes = [];
+  state.layers = []; // les textes de l'ancien motif ne suivent pas
   state.traceOnly = false;
   state.selectedStroke = null;
   state.pendingWidthMm = widthMm;
@@ -579,10 +582,11 @@ async function runQueue() {
     const gen = imageGen;
     try {
       if (level >= 3 && !(await doAnalyze(gen, fit))) continue;
-      if (level >= 2 && !(await doVectorize(gen))) continue;
+      if ((level >= 2 || scaleChanged()) && !(await doVectorize(gen))) continue;
       if (!(await doStitch(gen))) continue;
       refreshUI();
       if (fit) fitView();
+      scheduleDraft();
     } catch (e) {
       console.error(e);
       toast("Erreur de calcul : " + e.message, "bad");
@@ -592,12 +596,25 @@ async function runQueue() {
   computing = false;
 }
 
+// La taille a beaucoup changé : les petits îlots sont recalculés (en mm²).
+function scaleChanged() {
+  if (!state.labels || state.mode === "file" || !state.vectorMmPerPx) return false;
+  const r = geometry().mmPerPx / state.vectorMmPerPx;
+  return r < 0.8 || r > 1.25;
+}
+
 async function doAnalyze(gen, fitSize) {
   if (!state.rgba) return false;
   // Dessin au trait : la photo devient des traits noirs sur blanc avant l'analyse.
   const sketch = state.style === "sketch";
-  const pixels = sketch ? sketchPixels(state.rgba, state.w, state.h, 5) : state.rgba;
-  const settings = sketch ? { ...state.settings, colors: 2, removeBackground: true, cleanup: Math.max(12, state.settings.cleanup) } : state.settings;
+  // Illustration : la photo est d'abord lissée en aplats, puis nettoyée plus fort.
+  const illus = state.style === "illustration";
+  const pixels = sketch ? sketchPixels(state.rgba, state.w, state.h, 5) : illus ? illustratePixels(state.rgba, state.w, state.h) : state.rgba;
+  const settings = sketch
+    ? { ...state.settings, colors: 2, removeBackground: true, cleanup: Math.max(12, state.settings.cleanup) }
+    : illus
+      ? { ...state.settings, smoothing: Math.max(2, state.settings.smoothing), cleanup: Math.max(120, state.settings.cleanup) }
+      : state.settings;
   const textLayers = state.layers.filter((L) => L.text);
   const { labels, layers, background } = await engine.analyze(pixels, state.w, state.h, settings);
   if (gen !== imageGen) return false;
@@ -629,6 +646,12 @@ async function doAnalyze(gen, fitSize) {
   if (fitSize) {
     state.widthMm = state.pendingWidthMm || 100;
     state.pendingWidthMm = null;
+    if (state.pendingLongMm) {
+      // Taille donnée pour le côté le plus long de ce qui est brodé.
+      const { box } = geometry();
+      state.widthMm = box.w >= box.h ? state.pendingLongMm : (state.pendingLongMm * box.w) / box.h;
+      state.pendingLongMm = null;
+    }
     const fit = hoopFitWidth();
     if (fit && fit < state.widthMm) state.widthMm = Math.floor(fit);
   }
@@ -637,7 +660,9 @@ async function doAnalyze(gen, fitSize) {
 
 async function doVectorize(gen) {
   if (!state.labels || state.mode === "file") return true;
-  const vectors = await engine.vectorize(state.labels, state.w, state.h, state.layers, state.settings);
+  const { mmPerPx } = geometry();
+  const vectors = await engine.vectorize(state.labels, state.w, state.h, state.layers, { ...state.settings, mmPerPx });
+  state.vectorMmPerPx = mmPerPx;
   if (gen !== imageGen) return false;
   state.vectors = vectors;
   state.paths = new Map();
@@ -653,13 +678,24 @@ async function doStitch(gen) {
     return true;
   }
   if (!state.labels) return false;
-  const pattern = await engine.stitch(state.layers, state.vectors, mmPerPx, {
-    style: state.style === "sketch" ? "fill" : state.style,
+  const pattern = await engine.stitch(state.layers, state.vectors, mmPerPx, stitchOptions(mmPerPx));
+  if (gen !== imageGen) return false;
+  state.patternScale = mmPerPx;
+  state.pattern = pattern;
+  state.progress = pattern.stitches.length;
+  stitchCache = null;
+  return true;
+}
+
+/** Options de points communes (motif entier ou morceau d'un grand motif). */
+function stitchOptions(mmPerPx, strokes = state.strokes) {
+  return {
+    style: state.style === "sketch" || state.style === "illustration" ? "fill" : state.style,
     outlineColor: state.outlineColor,
     outlineTriple: state.outlineTriple,
     outlineLength: state.outlineLength,
     traceOnly: state.traceOnly,
-    strokes: state.strokes.map((st) => ({
+    strokes: strokes.map((st) => ({
       points: st.points.map(([x, y]) => [x * mmPerPx, y * mmPerPx]),
       closed: st.closed,
       color: st.color,
@@ -668,13 +704,7 @@ async function doStitch(gen) {
       width: st.width,
       density: state.spacing,
     })),
-  });
-  if (gen !== imageGen) return false;
-  state.patternScale = mmPerPx;
-  state.pattern = pattern;
-  state.progress = pattern.stitches.length;
-  stitchCache = null;
-  return true;
+  };
 }
 
 /** Fichier importé : simple mise à l'échelle des points existants (rapide). */
@@ -1381,7 +1411,11 @@ function endPointer(e) {
       updateHistoryButtons();
     } else {
       const L = layerById(m.id);
-      if (L?.text) (L.text.cx += m.dx), (L.text.cy += m.dy);
+      if (L?.text) {
+        L.text.cx += m.dx;
+        L.text.cy += m.dy;
+        if (L.text.arc?.ox !== undefined) L.text.arc = { ...L.text.arc, ox: L.text.arc.ox + m.dx, oy: L.text.arc.oy + m.dy };
+      }
       scheduleVectorize(10);
     }
     return;
@@ -1961,7 +1995,8 @@ function syncSizeBar() {
   const { heightMm } = geometry();
   const long = Math.max(state.widthMm, heightMm);
   const hoop = hoopSize();
-  const max = hoop ? Math.max(...hoop) : 400;
+  // Au-delà du cadre : possible, le motif se brode alors en plusieurs fois.
+  const max = hoop ? Math.max(...hoop) * 2 : 400;
   $("#sizeRange").max = Math.max(max, Math.ceil(long));
   $("#sizeRange").value = Math.round(long);
   $("#sizeOut").textContent = `${fmt(state.widthMm)} × ${fmt(heightMm)} mm`;
@@ -2023,6 +2058,7 @@ function refreshUI() {
     status.className = "hoop-status " + (fits ? "ok" : "bad");
   }
   $("#btnFitHoop").hidden = fits;
+  $("#btnSplit").hidden = fits || state.mode === "file";
   $("#btnExport").disabled = !state.pattern || !state.pattern.stats.stitchCount;
   $("#btnQuick").disabled = $("#btnExport").disabled;
   $("#btnSaveProject").disabled = !state.labels;
@@ -2113,6 +2149,7 @@ function bindRange(id, key, handler, parse = Number) {
 
 bindRange("colors", "colors", () => runAnalyze());
 bindRange("cleanup", "cleanup", () => runAnalyze());
+bindRange("minAreaMm", "minAreaMm", () => scheduleVectorize(0));
 bindRange("smoothing", "smoothing", () => runAnalyze());
 bindRange("curve", "curve", () => scheduleVectorize());
 bindRange("detail", "detail", () => scheduleVectorize());
@@ -2217,8 +2254,11 @@ $("#stitchPick").addEventListener("click", (e) => {
   changedLayers();
 });
 
+// Styles brodés en couleurs pleines (les autres : contours).
+const isFilledStyle = () => ["fill", "sketch", "illustration"].includes(state.style);
+
 function syncStyleUI() {
-  const outline = state.style !== "fill";
+  const outline = !isFilledStyle();
   $("#spacingField").hidden = outline;
   $("#stitchPickField").hidden = outline;
   const len = outline ? state.outlineLength : state.stitchLength;
@@ -2227,7 +2267,7 @@ function syncStyleUI() {
   $("#spacing").value = state.spacing;
   $("#spacingOut").textContent = state.spacing;
   $("#style").value = state.style;
-  $("#outlineOpts").hidden = state.style === "fill";
+  $("#outlineOpts").hidden = !outline;
   $("#outlineColorWrap").hidden = state.style !== "outline1";
   $("#outlineColor").value = state.outlineColor.toLowerCase();
   $("#outlineTriple").checked = state.outlineTriple;
@@ -2244,7 +2284,7 @@ liveRange($("#spacing"), (v) => {
 });
 liveRange($("#stitchLen"), (v) => {
   const n = Number(v);
-  if (state.style !== "fill") {
+  if (!isFilledStyle()) {
     state.outlineLength = n;
   } else {
     state.stitchLength = n;
@@ -2256,9 +2296,10 @@ liveRange($("#stitchLen"), (v) => {
 
 $("#style").addEventListener("change", (e) => {
   pushHistory();
-  const wasSketch = state.style === "sketch";
+  const prepared = (st) => (st === "sketch" ? 1 : st === "illustration" ? 2 : 0);
+  const before = prepared(state.style);
   state.style = e.target.value;
-  if (wasSketch !== (state.style === "sketch")) {
+  if (before !== prepared(state.style)) {
     syncStyleUI();
     runAnalyze();
     return;
@@ -2347,32 +2388,210 @@ $("#btnPlay").addEventListener("click", () => {
 $("#fileInput").addEventListener("change", (e) => loadFile(e.target.files[0]));
 // ------------------------------------------------------------------ modèles
 
+// [fichier, nom, catégorie, taille conseillée (côté le plus long, mm)]
 const TEMPLATES = [
-  ["coeur", "Cœur"],
-  ["etoile", "Étoile"],
-  ["fleur", "Fleur"],
-  ["badge-montagne", "Badge montagne"],
-  ["patte", "Patte"],
-  ["ancre", "Ancre"],
-  ["couronne", "Couronne"],
-  ["eclair", "Éclair"],
-  ["arc-en-ciel", "Arc-en-ciel"],
+  ["chat", "Chat", "animaux", 90],
+  ["chien", "Chien", "animaux", 90],
+  ["renard", "Renard", "animaux", 90],
+  ["lapin", "Lapin", "animaux", 90],
+  ["ourson", "Ourson", "animaux", 90],
+  ["hibou", "Hibou", "animaux", 90],
+  ["papillon", "Papillon", "animaux", 90],
+  ["poisson", "Poisson", "animaux", 90],
+  ["baleine", "Baleine", "animaux", 90],
+  ["patte", "Patte", "animaux", 80],
+  ["fleur", "Fleur", "nature", 90],
+  ["tulipe", "Tulipe", "nature", 90],
+  ["marguerite", "Marguerite", "nature", 90],
+  ["feuille", "Feuille", "nature", 90],
+  ["sapin", "Sapin", "nature", 90],
+  ["champignon", "Champignon", "nature", 90],
+  ["soleil", "Soleil", "nature", 90],
+  ["cactus", "Cactus", "nature", 90],
+  ["arc-en-ciel", "Arc-en-ciel", "nature", 90],
+  ["badge-montagne", "Badge montagne", "nature", 90],
+  ["coeur", "Cœur", "fetes", 80],
+  ["deux-coeurs", "Deux cœurs", "fetes", 90],
+  ["ballon", "Ballon", "fetes", 90],
+  ["cadeau", "Cadeau", "fetes", 90],
+  ["gateau", "Gâteau", "fetes", 90],
+  ["etoile-filante", "Étoile filante", "fetes", 90],
+  ["etoile", "Étoile", "fetes", 80],
+  ["couronne", "Couronne", "fetes", 90],
+  ["fraise", "Fraise", "petits", 36],
+  ["cerise", "Cerises", "petits", 36],
+  ["abeille", "Abeille", "petits", 36],
+  ["coccinelle", "Coccinelle", "petits", 36],
+  ["nuage", "Nuage", "petits", 36],
+  ["lune", "Lune", "petits", 36],
+  ["coeur", "Petit cœur", "petits", 32],
+  ["etoile", "Petite étoile", "petits", 34],
+  ["ancre", "Ancre", "divers", 90],
+  ["eclair", "Éclair", "divers", 90],
 ];
-$("#templateGrid").innerHTML = TEMPLATES.map(
-  ([k, label]) => `<button type="button" data-tpl="${k}"><img src="assets/modeles/${k}.svg" alt="" loading="lazy" />${label}</button>`,
-).join("");
-$("#btnTemplates").addEventListener("click", () => $("#templatesDialog").showModal());
+const TPL_CATS = [
+  ["tous", "Tous"],
+  ["animaux", "Animaux"],
+  ["nature", "Fleurs & nature"],
+  ["fetes", "Cœurs & fêtes"],
+  ["petits", "Petits (cadre 4 × 4)"],
+  ["divers", "Divers"],
+];
+let tplCat = "tous";
+
+function renderTemplates() {
+  $("#tplCats").innerHTML = TPL_CATS.map(([k, label]) => `<button type="button" data-cat="${k}" class="${k === tplCat ? "active" : ""}">${label}</button>`).join("");
+  $("#templateGrid").innerHTML = TEMPLATES.map((t, i) => [t, i])
+    .filter(([t]) => tplCat === "tous" || t[2] === tplCat)
+    .map(
+      ([[k, label, , mm], i]) =>
+        `<button type="button" data-tpl="${i}"><img src="assets/modeles/${k}.svg" alt="" loading="lazy" />${label}<small>${fmt(mm / 10, 1)} cm</small></button>`,
+    )
+    .join("");
+}
+renderTemplates();
+$("#tplCats").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cat]");
+  if (!b) return;
+  tplCat = b.dataset.cat;
+  renderTemplates();
+});
+$("#btnTemplates").addEventListener("click", () => {
+  $("#templatesDialog").showModal();
+  drawMonogram($("#monoPreview"));
+});
 $("#templatesClose").addEventListener("click", () => $("#templatesDialog").close());
+
 $("#templateGrid").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tpl]");
   if (!b) return;
+  const [k, , cat, mm] = TEMPLATES[Number(b.dataset.tpl)];
   const img = new Image();
   img.onload = () => {
     $("#templatesDialog").close();
     state.original = img;
-    loadImage(img, b.dataset.tpl);
+    // Petits motifs : le petit cadre de la machine, s'il existe.
+    const small = MACHINES[state.machine].hoops.find((h) => h === "40x40" || h === "50x50");
+    if (cat === "petits" && small && state.hoop !== small) {
+      state.hoop = small;
+      fillMachineUI();
+      toast(`Cadre ${small.replace("x", " × ")} mm choisi pour ce petit motif.`, "ok");
+    }
+    state.pendingLongMm = mm;
+    loadImage(img, k);
   };
-  img.src = `assets/modeles/${b.dataset.tpl}.svg`;
+  img.src = `assets/modeles/${k}.svg`;
+});
+
+// Lettre décorée : initiale dans un décor (laurier, cercle, cœur, fleurs).
+$("#monoFont").innerHTML = FONTS.map((f) => `<option value="${f.family}">${f.label}</option>`).join("");
+$("#monoFont").value = "Roboto Slab";
+
+async function drawMonogram(c) {
+  const g = c.getContext("2d");
+  const S = c.width;
+  const k = S / 800;
+  const letter = ($("#monoText").value.trim() || "A").slice(0, 3);
+  const col = $("#monoColor").value;
+  const col2 = $("#monoColor2").value;
+  const frame = $("#monoFrame").value;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, S, S);
+  g.setTransform(k, 0, 0, k, 0, 0);
+  if (frame === "cercle") {
+    g.lineWidth = 44;
+    g.strokeStyle = col2;
+    g.beginPath();
+    g.arc(400, 400, 330, 0, Math.PI * 2);
+    g.stroke();
+  } else if (frame === "coeur") {
+    g.fillStyle = col2;
+    g.fill(new Path2D("M400 730 C140 560 50 420 80 280 C110 140 300 110 400 250 C500 110 690 140 720 280 C750 420 660 560 400 730 Z"));
+  } else if (frame === "laurier") {
+    // Deux branches qui montent de chaque côté, ouvertes en haut.
+    g.fillStyle = col2;
+    g.strokeStyle = col2;
+    g.lineWidth = 16;
+    g.lineCap = "round";
+    const deg = Math.PI / 180;
+    for (const [a0, a1, dir] of [
+      [105, 245, 1],
+      [75, -65, -1],
+    ]) {
+      g.beginPath();
+      g.arc(400, 400, 300, a0 * deg, a1 * deg, dir < 0);
+      g.stroke();
+      for (let i = 0; i < 8; i++) {
+        const a = (a0 + ((a1 - a0) * (i + 0.6)) / 8) * deg;
+        const x = 400 + 300 * Math.cos(a);
+        const y = 400 + 300 * Math.sin(a);
+        // Sens de la branche (vers son extrémité).
+        const dx = -Math.sin(a) * dir;
+        const dy = Math.cos(a) * dir;
+        const r = Math.atan2(dx, -dy);
+        for (const off of [-0.6, 0.6]) {
+          g.save();
+          g.translate(x, y);
+          g.rotate(r + off);
+          g.beginPath();
+          g.ellipse(0, -34, 18, 38, 0, 0, Math.PI * 2);
+          g.fill();
+          g.restore();
+        }
+      }
+      // Feuille au bout de la branche.
+      const a = a1 * deg;
+      g.save();
+      g.translate(400 + 300 * Math.cos(a), 400 + 300 * Math.sin(a));
+      g.rotate(Math.atan2(-Math.sin(a) * dir, -Math.cos(a) * dir));
+      g.beginPath();
+      g.ellipse(0, -30, 18, 38, 0, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+    }
+  } else if (frame === "fleurs") {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      const x = 400 + 310 * Math.cos(a);
+      const y = 400 + 310 * Math.sin(a);
+      g.fillStyle = col2;
+      for (let p = 0; p < 5; p++) {
+        g.beginPath();
+        g.arc(x + 34 * Math.cos((p / 5) * Math.PI * 2), y + 34 * Math.sin((p / 5) * Math.PI * 2), 28, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = "#f3a712";
+      g.beginPath();
+      g.arc(x, y, 22, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  const size = letter.length === 1 ? 300 : letter.length === 2 ? 210 : 150;
+  const m = await measureText(letter, { font: $("#monoFont").value, px: size });
+  const fit = Math.min(1, 440 / m.width);
+  await drawText(g, letter, { font: $("#monoFont").value, px: size * fit, color: frame === "coeur" ? "#fff" : col, cx: 400, cy: frame === "coeur" ? 430 : 410 });
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+for (const id of ["monoText", "monoFrame", "monoFont", "monoColor", "monoColor2"]) {
+  $("#" + id).addEventListener("input", () => drawMonogram($("#monoPreview")));
+}
+$("#monogram").addEventListener("toggle", () => {
+  if ($("#monogram").open) {
+    ensureTextFonts();
+    drawMonogram($("#monoPreview"));
+  }
+});
+$("#monoGo").addEventListener("click", async () => {
+  const c = document.createElement("canvas");
+  c.width = 800;
+  c.height = 800;
+  await drawMonogram(c);
+  $("#templatesDialog").close();
+  state.original = c;
+  state.pendingLongMm = 90;
+  loadImage(c, "lettre-" + ($("#monoText").value.trim() || "A"));
 });
 
 // ------------------------------------------------------------------ thème, mode simple, visite guidée
@@ -2736,8 +2955,13 @@ function textOptions() {
     sizeMm: Math.max(4, Number($("#textSize").value) || 15),
     pos: $("#textPos").value,
     color: $("#textColor").value.toUpperCase(),
+    arc: $("#textShape").value === "arc",
+    curve: Number($("#textCurve").value) || 140,
   };
 }
+
+/** Arc du texte : en arche au-dessus, en sourire en dessous. */
+const arcSpec = (o) => (o.arc ? { dir: o.pos === "bottom" ? "down" : "up", angle: o.curve } : null);
 
 async function drawTextPreview() {
   const c = $("#textPreview");
@@ -2745,9 +2969,11 @@ async function drawTextPreview() {
   const o = textOptions();
   g.fillStyle = "#fff";
   g.fillRect(0, 0, c.width, c.height);
-  const m = await measureText(o.text, { font: o.font, px: 60 });
+  const arc = arcSpec(o);
+  $("#textCurveField").hidden = !o.arc;
+  const m = await measureText(o.text, { font: o.font, px: 60, arc });
   const k = Math.min(1, (c.width - 40) / m.width, (c.height - 30) / m.height);
-  await drawText(g, o.text, { font: o.font, px: 60 * k, color: o.color, cx: c.width / 2, cy: c.height / 2 });
+  await drawText(g, o.text, { font: o.font, px: 60 * k, color: o.color, cx: c.width / 2, cy: c.height / 2, arc });
 }
 
 let textFontsLoaded = false;
@@ -2759,7 +2985,10 @@ function ensureTextFonts() {
   link.rel = "stylesheet";
   link.href =
     "https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Dancing+Script:wght@700&family=Lobster&family=Pacifico&family=Roboto+Slab:wght@700&display=swap";
-  link.onload = () => drawTextPreview();
+  link.onload = () => {
+    drawTextPreview();
+    if ($("#templatesDialog").open) drawMonogram($("#monoPreview"));
+  };
   document.head.appendChild(link);
 }
 
@@ -2771,8 +3000,9 @@ function openTextDialog() {
 }
 $("#btnText").addEventListener("click", openTextDialog);
 $("#textCancel").addEventListener("click", () => $("#textDialog").close());
-for (const id of ["textValue", "textFont", "textSize", "textColor"]) {
+for (const id of ["textValue", "textFont", "textSize", "textColor", "textShape", "textCurve", "textPos"]) {
   $("#" + id).addEventListener("input", () => {
+    $("#textCurveOut").textContent = $("#textCurve").value;
     clearTimeout(textPreviewTimer);
     textPreviewTimer = setTimeout(drawTextPreview, 120);
   });
@@ -2782,7 +3012,8 @@ for (const id of ["textValue", "textFont", "textSize", "textColor"]) {
 $("#textNew").addEventListener("click", async () => {
   const o = textOptions();
   const pxPerMm = 8;
-  const m = await measureText(o.text, { font: o.font, px: o.sizeMm * pxPerMm });
+  const arc = arcSpec(o);
+  const m = await measureText(o.text, { font: o.font, px: o.sizeMm * pxPerMm, arc });
   const pad = 30;
   const c = document.createElement("canvas");
   c.width = Math.ceil(m.width + pad * 2);
@@ -2790,7 +3021,7 @@ $("#textNew").addEventListener("click", async () => {
   const g = c.getContext("2d");
   g.fillStyle = "#fff";
   g.fillRect(0, 0, c.width, c.height);
-  await drawText(g, o.text, { font: o.font, px: o.sizeMm * pxPerMm, color: o.color, cx: c.width / 2, cy: c.height / 2 });
+  await drawText(g, o.text, { font: o.font, px: o.sizeMm * pxPerMm, color: o.color, cx: c.width / 2, cy: c.height / 2, arc });
   $("#textDialog").close();
   state.settings.colors = 2;
   state.style = "fill";
@@ -2807,17 +3038,26 @@ $("#textAdd").addEventListener("click", async () => {
   const o = textOptions();
   const { box, mmPerPx } = geometry();
   const px = o.sizeMm / mmPerPx;
-  const m = await measureText(o.text, { font: o.font, px });
   const gap = px * 0.6;
+  // En arc au-dessus / en dessous : le texte suit un cercle autour du motif.
+  let arc = arcSpec(o);
+  if (arc && o.pos !== "center") {
+    arc = { dir: arc.dir, radius: Math.max(box.w, box.h) / 2 + gap, ox: box.x + box.w / 2, oy: box.y + box.h / 2 };
+  }
+  const m = await measureText(o.text, { font: o.font, px, arc });
   // Place libre au-dessus / en dessous : on agrandit l'image si nécessaire.
   let cy;
-  if (o.pos === "center") cy = box.y + box.h / 2;
+  let cx = box.x + box.w / 2;
+  if (arc?.ox !== undefined) {
+    cx = arc.ox + m.box.cx;
+    cy = arc.oy + m.box.cy;
+  } else if (o.pos === "center") cy = box.y + box.h / 2;
   else if (o.pos === "top") cy = box.y - gap - m.height / 2;
   else cy = box.y + box.h + gap + m.height / 2;
-  const cx = box.x + box.w / 2;
   const needTop = Math.max(0, Math.ceil(m.height / 2 - cy + 4));
   const needBottom = Math.max(0, Math.ceil(cy + m.height / 2 - state.h + 4));
   const needSide = Math.max(0, Math.ceil(m.width / 2 - cx + 4), Math.ceil(cx + m.width / 2 - state.w + 4));
+  if (arc?.ox !== undefined) arc = { ...arc, ox: arc.ox + needSide, oy: arc.oy + needTop };
   pushHistory();
   growCanvas(needTop, needBottom, needSide);
   const id = Math.max(-1, ...state.layers.map((L) => L.id)) + 1;
@@ -2830,7 +3070,7 @@ $("#textAdd").addEventListener("click", async () => {
     ...DEFAULT_LAYER,
     density: state.spacing,
     // Paramètres gardés : le texte reste modifiable et survit aux réanalyses.
-    text: { text: o.text, font: o.font, px, cx: cx + needSide, cy: cy + needTop },
+    text: { text: o.text, font: o.font, px, cx: cx + needSide, cy: cy + needTop, arc },
   };
   await paintTextLayer(T, state.labels);
   state.layers.push(T);
@@ -2842,6 +3082,125 @@ $("#textAdd").addEventListener("click", async () => {
   requestCompute("vectorize", { fit: true });
 });
 
+// ------------------------------------------------------------------ prénoms en série
+
+/**
+ * Points d'un prénom seul, à la taille réelle (même police, taille, couleur
+ * et forme que dans « Texte »). arcRadiusMm : arc qui entoure un motif.
+ */
+async function namePattern(name, o, arcRadiusMm = null) {
+  const pxPerMm = 8;
+  const px = o.sizeMm * pxPerMm;
+  let arc = arcSpec(o);
+  if (arc && arcRadiusMm) arc = { dir: arc.dir, radius: arcRadiusMm * pxPerMm };
+  const m = await measureText(name, { font: o.font, px, arc });
+  const pad = 30;
+  const c = document.createElement("canvas");
+  c.width = Math.ceil(m.width + pad * 2);
+  c.height = Math.ceil(m.height + pad * 2);
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, c.width, c.height);
+  // Lettres en noir pour l'analyse (même si le fil choisi est clair).
+  await drawText(g, name, { font: o.font, px, color: "#000", cx: c.width / 2, cy: c.height / 2, arc });
+  const rgba = g.getImageData(0, 0, c.width, c.height).data;
+  const settings = { ...DEFAULT_SETTINGS, colors: 2, removeBackground: true, cleanup: 12 };
+  const { labels, layers, background } = await engine.analyze(rgba, c.width, c.height, settings);
+  const fab = FABRICS[state.fabricType] || FABRICS.coton;
+  for (const L of layers) {
+    if (L.id === background || L.name.endsWith("(intérieur)")) {
+      L.type = "none";
+      continue;
+    }
+    Object.assign(L, { color: o.color, name: threadLabel(o.color) + " (texte)", density: state.spacing, stitchLength: state.stitchLength, pullComp: fab.pullComp, underlay: fab.underlay });
+  }
+  const vectors = await engine.vectorize(labels, c.width, c.height, layers, settings);
+  const pattern = await engine.stitch(layers, vectors, 1 / pxPerMm, { style: "fill" });
+  const arcCenter = arc ? [(c.width / 2 - m.box.cx) / pxPerMm, (c.height / 2 - m.box.cy) / pxPerMm] : null;
+  return { pattern, arcCenter };
+}
+
+/** Le motif actuel + le prénom, placé comme dans « Ajouter au motif ». */
+async function designWithName(name, o) {
+  const d = state.pattern;
+  const W = d.stats.widthMm;
+  const H = d.stats.heightMm;
+  const gap = o.sizeMm * 0.6;
+  if (o.arc && o.pos !== "center") {
+    const { pattern, arcCenter } = await namePattern(name, o, Math.max(W, H) / 2 + gap);
+    // Centre de l'arc posé sur le centre du motif.
+    const dx = Math.round((pattern.origin[0] - arcCenter[0]) * 10);
+    const dy = Math.round((pattern.origin[1] - arcCenter[1]) * 10);
+    return combinePatterns([{ pattern: d }, { pattern, dx, dy }]);
+  }
+  const { pattern } = await namePattern(name, o);
+  const nh = pattern.stats.heightMm;
+  const dy = o.pos === "center" ? 0 : (o.pos === "top" ? -1 : 1) * Math.round((H / 2 + gap + nh / 2) * 10);
+  return combinePatterns([{ pattern: d }, { pattern, dy }]);
+}
+
+const parseNames = (txt) =>
+  txt
+    .split(/[\n,;]+/)
+    .map((n) => n.trim())
+    .filter(Boolean)
+    .slice(0, 200);
+
+function fitsHoopMm(w, h) {
+  const hoop = hoopSize();
+  if (!hoop) return true;
+  return (w <= hoop[0] && h <= hoop[1]) || (w <= hoop[1] && h <= hoop[0]);
+}
+
+$("#textSeries").addEventListener("click", () => {
+  $("#textDialog").close();
+  const hasDesign = !!state.pattern?.stats.stitchCount && !state.layers.every((L) => L.text);
+  $("#seriesMode").value = hasDesign ? "with" : "alone";
+  $("#seriesMode").querySelector('[value="with"]').disabled = !hasDesign;
+  $("#seriesList").innerHTML = "";
+  $("#seriesDialog").showModal();
+});
+$("#seriesClose").addEventListener("click", () => $("#seriesDialog").close());
+$("#seriesGo").addEventListener("click", async () => {
+  const names = parseNames($("#seriesNames").value);
+  if (!names.length) {
+    toast("Écrivez au moins un prénom.", "bad");
+    return;
+  }
+  const o = textOptions();
+  const withDesign = $("#seriesMode").value === "with" && state.pattern;
+  const m = MACHINES[state.machine];
+  const files = [];
+  const used = new Set();
+  const list = $("#seriesList");
+  list.innerHTML = "";
+  $("#seriesGo").disabled = true;
+  busy(true);
+  try {
+    for (const name of names) {
+      const pattern = withDesign ? await designWithName(name, o) : (await namePattern(name, o)).pattern;
+      let file = machineFileName(state.machine, safeDesignName(name), state.format);
+      for (let k = 2; used.has(file.toLowerCase()); k++) file = machineFileName(state.machine, safeDesignName(name).slice(0, 6) + k, state.format);
+      used.add(file.toLowerCase());
+      files.push({ name: file, data: writeFormat(state.format, pattern, safeDesignName(name), { trims: m.trims !== false }) });
+      const s = pattern.stats;
+      const ok = fitsHoopMm(s.widthMm, s.heightMm);
+      const li = document.createElement("li");
+      li.innerHTML = `<b></b><span>${ok ? "✓" : "⚠ trop grand pour le cadre"}</span>`;
+      li.querySelector("b").textContent = `${name} — ${file}`;
+      li.querySelector("b").insertAdjacentHTML("beforeend", `<small>${fmt(s.widthMm, 1)} × ${fmt(s.heightMm, 1)} mm · ${fmt(s.stitchCount)} points</small>`);
+      list.append(li);
+    }
+    download(makeZip(files), `${safeDesignName(withDesign ? designName() : "prenoms")}-prenoms.zip`, "application/zip");
+    toast(`${files.length} fichier(s) prêts.`, "ok");
+  } catch (e) {
+    toast(e.message, "bad");
+  } finally {
+    busy(false);
+    $("#seriesGo").disabled = false;
+  }
+});
+
 /** Dessine les lettres d'un calque texte dans la carte des calques. */
 async function paintTextLayer(T, labels) {
   for (let i = 0; i < labels.length; i++) if (labels[i] === T.id) labels[i] = -1;
@@ -2849,7 +3208,7 @@ async function paintTextLayer(T, labels) {
   mask.width = state.w;
   mask.height = state.h;
   const mg = mask.getContext("2d", { willReadFrequently: true });
-  await drawText(mg, T.text.text, { font: T.text.font, px: T.text.px, color: "#000", cx: T.text.cx, cy: T.text.cy });
+  await drawText(mg, T.text.text, { font: T.text.font, px: T.text.px, color: "#000", cx: T.text.cx, cy: T.text.cy, arc: T.text.arc || null });
   const md = mg.getImageData(0, 0, state.w, state.h).data;
   for (let i = 0; i < labels.length; i++) if (md[i * 4 + 3] >= 128) labels[i] = T.id;
 }
@@ -2868,6 +3227,13 @@ function growCanvas(top, bottom, side) {
   g.drawImage(state.source, side, top);
   const labels = new Int16Array(w * h).fill(-1);
   for (let y = 0; y < state.h; y++) labels.set(state.labels.subarray(y * state.w, (y + 1) * state.w), (y + top) * w + side);
+  // Les textes déjà posés et les traits dessinés suivent le décalage.
+  for (const L of state.layers) {
+    if (!L.text) continue;
+    L.text = { ...L.text, cx: L.text.cx + side, cy: L.text.cy + top };
+    if (L.text.arc?.ox !== undefined) L.text.arc = { ...L.text.arc, ox: L.text.arc.ox + side, oy: L.text.arc.oy + top };
+  }
+  state.strokes = state.strokes.map((st) => ({ ...st, points: st.points.map(([x, y]) => [x + side, y + top]) }));
   state.source = c;
   state.labels = labels;
   state.w = w;
@@ -3208,9 +3574,8 @@ dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}dt{color:#6
  * croix du centre et le haut, pour le placer sur le vêtement avant d'encadrer.
  * Découpé en pages A4 s'il est plus grand.
  */
-function gabaritHTML() {
-  const p = state.pattern;
-  const name = designName();
+function gabaritHTML({ pattern = state.pattern, name = designName(), hoop: hoopIn = hoopSize(), areas = [] } = {}) {
+  const p = pattern;
   const st = p.stitches;
   const [bx0, by0, bx1, by1] = patternBounds(st.filter((s) => s[2] === STITCH));
   const cx = (bx0 + bx1) / 2;
@@ -3241,8 +3606,10 @@ function gabaritHTML() {
     const [r, g, b] = hexToRgb(hex);
     return 0.299 * r + 0.587 * g + 0.114 * b > 215 ? "#9a9a9a" : hex;
   };
-  let hoop = hoopSize();
+  let hoop = hoopIn;
   if (hoop && (dw > dh) !== (hoop[0] > hoop[1])) hoop = [hoop[1], hoop[0]];
+  // Zones (en mm, repère du motif) : morceaux d'un grand motif.
+  const toLocal = (x, y) => [(x * 10 - cx) / 10, (y * 10 - cy) / 10];
   const halfW = Math.max(dw, hoop ? hoop[0] : 0) / 2 + 6;
   const halfH = Math.max(dh, hoop ? hoop[1] : 0) / 2 + 10;
   const PW = 190;
@@ -3266,7 +3633,17 @@ function gabaritHTML() {
     `<path d="M${-halfW} 0H${halfW}M0 ${-halfH}V${halfH}" stroke="#1d1a16" stroke-width=".25" stroke-dasharray="1.5 1.5"/>` +
     `<path d="${ticks.join("")}" stroke="#1d1a16" stroke-width=".25"/>` +
     `<circle r="2.5" fill="none" stroke="#1d1a16" stroke-width=".35"/>` +
-    `<text x="0" y="${-halfH + 7}" font-size="5" font-weight="700" text-anchor="middle" fill="#1d1a16">↑ ${t("HAUT")}</text>`;
+    `<text x="0" y="${-halfH + 7}" font-size="5" font-weight="700" text-anchor="middle" fill="#1d1a16">↑ ${t("HAUT")}</text>` +
+    areas
+      .map((a) => {
+        const [x0, y0] = toLocal(a.x0, a.y0);
+        const [x1, y1] = toLocal(a.x1, a.y1);
+        return (
+          `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="none" stroke="#d8432e" stroke-width=".5" stroke-dasharray="4 2"/>` +
+          `<text x="${x0 + 2}" y="${y0 + 6}" font-size="5" font-weight="700" fill="#d8432e">${a.label}</text>`
+        );
+      })
+      .join("");
   const pages = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -3297,6 +3674,175 @@ async function openPrintable(html, fileName) {
   const win = (await hostedDownloads) ? null : window.open(url, "_blank");
   if (!win) download(html, fileName, "text/html");
 }
+
+// ------------------------------------------------------------------ grand motif en plusieurs fois
+
+const MARK_COLOR = "#E4007C";
+let splitResult = null;
+
+/** Découpe le motif en morceaux qui tiennent chacun dans le cadre. */
+async function buildPieces() {
+  const hoop = hoopSize();
+  if (!hoop || !state.labels || state.mode === "file") return null;
+  const { box, mmPerPx } = geometry();
+  const plan = planPieces(box.w * mmPerPx, box.h * mmPerPx, hoop);
+  if (!plan) return { plan: null };
+  const ox = box.x * mmPerPx;
+  const oy = box.y * mmPerPx;
+  const markLayer = (marks, id) => ({
+    color: MARK_COLOR,
+    name: "Repères d'alignement",
+    id,
+    runs: marks.flatMap(([x, y]) => crossRuns([ox + x, oy + y])),
+  });
+  const pieces = [];
+  for (let i = 0; i < plan.pieces.length; i++) {
+    const P = plan.pieces[i];
+    const rect = { x0: box.x + P.x0 / mmPerPx, x1: box.x + P.x1 / mmPerPx, y0: box.y + P.y0 / mmPerPx, y1: box.y + P.y1 / mmPerPx };
+    const vectors = new Map();
+    for (const [id, loops] of state.vectors) vectors.set(id, loops.map((l) => clipPolygon(l, rect)).filter((l) => l.length >= 3));
+    const strokes = [];
+    for (const st of state.strokes) {
+      if (st.closed && st.stitch === "fill") {
+        const poly = clipPolygon(st.points, rect);
+        if (poly.length >= 3) strokes.push({ ...st, points: poly });
+      } else {
+        const pts = st.closed ? st.points.concat([st.points[0]]) : st.points;
+        for (const part of clipPolyline(pts, rect)) strokes.push({ ...st, points: part, closed: false });
+      }
+    }
+    const before = [];
+    const after = [];
+    plan.pieces.forEach((_, j) => {
+      if (j === i) return;
+      const m = sharedMarks(plan, j, i);
+      if (m.length) (j < i ? before : after).push(...m);
+    });
+    const pattern = await engine.stitch(state.layers, vectors, mmPerPx, {
+      ...stitchOptions(mmPerPx, strokes),
+      before: before.length ? [markLayer(before, "reperes-avant")] : [],
+      after: after.length ? [markLayer(after, "reperes-apres")] : [],
+    });
+    pieces.push({ index: i, piece: P, pattern });
+  }
+  return { plan, pieces, ox, oy, hoop };
+}
+
+function pieceFileName(i) {
+  const name = designName();
+  const base = MACHINES[state.machine]?.shortName ? name.normalize("NFD").replace(/[^A-Za-z0-9]/g, "").slice(0, 6) || "MOTIF" : `${name}-`;
+  return machineFileName(state.machine, `${base}${i + 1}`, state.format);
+}
+
+function pieceBytes(pc) {
+  const m = MACHINES[state.machine];
+  return writeFormat(state.format, pc.pattern, `${designName().slice(0, 13)}${pc.index + 1}`, { trims: m.trims !== false });
+}
+
+/** Zones des morceaux pour le plan (repère du motif entier). */
+function planAreas(res) {
+  const o = state.pattern.origin;
+  return res.pieces.map((pc) => ({
+    x0: res.ox + pc.piece.x0 - o[0],
+    y0: res.oy + pc.piece.y0 - o[1],
+    x1: res.ox + pc.piece.x1 - o[0],
+    y1: res.oy + pc.piece.y1 - o[1],
+    label: `${pc.index + 1}`,
+  }));
+}
+
+async function openSplit() {
+  if (!state.pattern) return;
+  $("#splitIntro").textContent = "Découpe en cours…";
+  $("#splitList").innerHTML = "";
+  $("#splitDialog").showModal();
+  busy(true);
+  try {
+    splitResult = await buildPieces();
+  } finally {
+    busy(false);
+  }
+  if (!splitResult?.plan) {
+    $("#splitIntro").textContent = "Le motif est trop grand, même en 9 morceaux : réduisez sa taille ou choisissez un plus grand cadre.";
+    return;
+  }
+  const { plan, pieces, hoop } = splitResult;
+  const s = state.pattern.stats;
+  $("#splitIntro").textContent =
+    `Votre motif (${fmt(s.widthMm, 1)} × ${fmt(s.heightMm, 1)} mm) est plus grand que le cadre ${hoop[0]} × ${hoop[1]} mm. ` +
+    `Il sera brodé en ${pieces.length} morceaux (${plan.cols} × ${plan.rows}), avec des croix de repère pour les aligner.`;
+  $("#splitList").innerHTML = pieces
+    .map((pc) => {
+      const st = pc.pattern.stats;
+      return `<li><b>Morceau ${pc.index + 1}<small>${fmt(st.widthMm, 1)} × ${fmt(st.heightMm, 1)} mm · ${fmt(st.stitchCount)} points · ${st.colors} fil(s)</small></b>
+        <button type="button" class="btn small ghost" data-piece-gabarit="${pc.index}">Gabarit</button>
+        <button type="button" class="btn small primary" data-piece="${pc.index}">⬇ ${pieceFileName(pc.index)}</button></li>`;
+    })
+    .join("");
+  drawSplit();
+}
+
+function drawSplit() {
+  const c = $("#splitCanvas");
+  const r = c.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(r.width * dpr);
+  c.height = Math.round(r.height * dpr);
+  const g = c.getContext("2d");
+  const img = renderPNG(4);
+  const k = Math.min((c.width * 0.92) / img.width, (c.height * 0.92) / img.height);
+  const x = (c.width - img.width * k) / 2;
+  const y = (c.height - img.height * k) / 2;
+  g.drawImage(img, x, y, img.width * k, img.height * k);
+  // renderPNG : 4 px/mm (ou moins) avec 4 mm de marge autour des points.
+  const s = state.pattern.stats;
+  const scale = (img.width / (s.widthMm + 8)) * k;
+  const o = state.pattern.origin;
+  const mmX = (v) => x + (v - o[0] + s.widthMm / 2 + 4) * scale;
+  const mmY = (v) => y + (v - o[1] + s.heightMm / 2 + 4) * scale;
+  g.lineWidth = 2 * dpr;
+  g.font = `700 ${16 * dpr}px system-ui, sans-serif`;
+  for (const pc of splitResult.pieces) {
+    const P = pc.piece;
+    const x0 = mmX(splitResult.ox + P.x0);
+    const y0 = mmY(splitResult.oy + P.y0);
+    g.setLineDash([6 * dpr, 4 * dpr]);
+    g.strokeStyle = "#d8432e";
+    g.strokeRect(x0, y0, mmX(splitResult.ox + P.x1) - x0, mmY(splitResult.oy + P.y1) - y0);
+    g.setLineDash([]);
+    g.fillStyle = "#d8432e";
+    g.fillText(String(pc.index + 1), x0 + 6 * dpr, y0 + 20 * dpr);
+  }
+}
+
+$("#btnSplit").addEventListener("click", openSplit);
+$("#splitClose").addEventListener("click", () => $("#splitDialog").close());
+$("#splitList").addEventListener("click", (e) => {
+  const d = e.target.closest("[data-piece]");
+  const gb = e.target.closest("[data-piece-gabarit]");
+  if (d) {
+    const pc = splitResult.pieces[Number(d.dataset.piece)];
+    download(pieceBytes(pc), pieceFileName(pc.index));
+  } else if (gb) {
+    const pc = splitResult.pieces[Number(gb.dataset.pieceGabarit)];
+    openPrintable(gabaritHTML({ pattern: pc.pattern, name: `${designName()} — morceau ${pc.index + 1}` }), `${designName()}-morceau${pc.index + 1}-gabarit.html`);
+  }
+});
+$("#splitPlan").addEventListener("click", () => {
+  if (!splitResult?.plan) return;
+  openPrintable(gabaritHTML({ hoop: null, areas: planAreas(splitResult), name: `${designName()} — plan` }), `${designName()}-plan.html`);
+});
+$("#splitZip").addEventListener("click", () => {
+  if (!splitResult?.plan) return;
+  const name = designName();
+  const enc = (h) => new TextEncoder().encode(h);
+  const files = [{ name: `${name}-plan.html`, data: enc(gabaritHTML({ hoop: null, areas: planAreas(splitResult), name: `${name} — plan` })) }];
+  for (const pc of splitResult.pieces) {
+    files.push({ name: pieceFileName(pc.index), data: pieceBytes(pc) });
+    files.push({ name: `${name}-morceau${pc.index + 1}-gabarit.html`, data: enc(gabaritHTML({ pattern: pc.pattern, name: `${name} — morceau ${pc.index + 1}` })) });
+  }
+  download(makeZip(files), `${name}-morceaux.zip`, "application/zip");
+});
 
 async function exportExtra(kind) {
   const name = designName();
@@ -3336,7 +3882,7 @@ function downloadForMachine() {
   const m = MACHINES[state.machine];
   const name = designName();
   if (!fitsHoop()) {
-    toast("Le motif est plus grand que le cadre : cliquez sur « Ajuster au cadre » avant de télécharger.", "bad");
+    toast("Le motif est plus grand que le cadre : « Ajuster au cadre » pour le réduire, ou « ✂ Broder en plusieurs fois ».", "bad");
     return;
   }
   download(writeFormat(state.format, state.pattern, name, { trims: m.trims !== false }), machineFileName(state.machine, name, state.format));
@@ -3577,7 +4123,8 @@ $("#projectInput").addEventListener("change", async (e) => {
 });
 
 function syncSettingsUI() {
-  for (const k of ["colors", "cleanup", "smoothing", "curve", "detail"]) {
+  for (const k of ["colors", "cleanup", "smoothing", "curve", "detail", "minAreaMm"]) {
+    state.settings[k] ??= DEFAULT_SETTINGS[k];
     $("#" + k).value = state.settings[k];
     $("#" + k + "Out").textContent = state.settings[k];
   }
@@ -3589,6 +4136,74 @@ function syncSettingsUI() {
   syncDrawBar();
   $("#threadChart").value = state.threadChart;
   $("#fabric").value = state.fabric;
+}
+
+// ------------------------------------------------------------------ brouillon automatique
+
+// Le travail en cours est gardé tout seul dans le navigateur : si Safari
+// recharge la page, on propose de le reprendre.
+const DRAFT_ID = "__brouillon";
+let draftTimer = null;
+let draftDirty = false;
+
+function scheduleDraft() {
+  if (!state.labels || !state.pattern) return;
+  draftDirty = true;
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraft, 2500);
+}
+
+async function saveDraft() {
+  clearTimeout(draftTimer);
+  if (!draftDirty || !state.labels || !state.pattern) return;
+  draftDirty = false;
+  try {
+    let thumb = null;
+    if (state.pattern.stats.stitchCount) {
+      const c = renderPNG(2);
+      const t = document.createElement("canvas");
+      const k = 128 / Math.max(c.width, c.height);
+      t.width = Math.max(1, Math.round(c.width * k));
+      t.height = Math.max(1, Math.round(c.height * k));
+      t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
+      thumb = t.toDataURL("image/jpeg", 0.8);
+    }
+    await saveProject({ id: DRAFT_ID, name: state.fileName, updatedAt: Date.now(), thumb, projectId: state.projectId, data: projectData() });
+  } catch (e) {
+    console.warn("Brouillon non enregistré :", e);
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveDraft();
+});
+window.addEventListener("pagehide", saveDraft);
+
+async function offerDraft() {
+  let d = null;
+  try {
+    d = await getProject(DRAFT_ID);
+  } catch {}
+  if (!d?.data || state.labels || Date.now() - d.updatedAt > 30 * 86400e3) return;
+  const min = Math.round((Date.now() - d.updatedAt) / 60000);
+  const when = min < 1 ? "à l'instant" : min < 60 ? `il y a ${min} min` : min < 1440 ? `il y a ${Math.round(min / 60)} h` : `il y a ${Math.round(min / 1440)} j`;
+  $("#draftInfo").textContent = `${d.name || "motif"} · ${when}`;
+  $("#draftThumb").hidden = !d.thumb;
+  if (d.thumb) $("#draftThumb").src = d.thumb;
+  $("#draftCard").hidden = false;
+  $("#draftResume").onclick = async () => {
+    $("#draftCard").hidden = true;
+    try {
+      await loadProjectData(d.data, d.projectId || null);
+      toast("Travail en cours repris.", "ok");
+    } catch (e) {
+      toast(e.message, "bad");
+    }
+  };
+  $("#draftDismiss").onclick = () => {
+    $("#draftCard").hidden = true;
+    deleteProject(DRAFT_ID).catch(() => {});
+  };
 }
 
 // ------------------------------------------------------------------ démarrage
@@ -3637,3 +4252,4 @@ const params = new URLSearchParams(location.search);
 if (params.has("debug")) window.__ft = { state, view };
 if (params.get("galerie")) openFromGallery(params.get("galerie"));
 else if (params.has("exemple") || window.FILTRACE_AUTOSAMPLE) loadSample();
+else offerDraft();

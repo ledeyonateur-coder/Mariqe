@@ -100,6 +100,7 @@
           <label for="style">Type de broderie</label>
           <select id="style">
             <option value="fill">Remplie (couleurs pleines)</option>
+            <option value="illustration">Illustration (photo simplifiée)</option>
             <option value="outline">Contours (chaque couleur)</option>
             <option value="outline1">Contours (un seul fil)</option>
             <option value="sketch">Dessin au trait (pour les photos)</option>
@@ -154,6 +155,11 @@
           <input type="range" id="colors" min="2" max="16" value="6" />
         </div>
         <label class="check"><input type="checkbox" id="removeBg" checked /> Retirer le fond</label>
+        <div class="field" data-hide-file>
+          <label for="minAreaMm">Petits détails supprimés (mm²) <output id="minAreaMmOut">6</output></label>
+          <input type="range" id="minAreaMm" min="0" max="20" step="1" value="6" />
+          <span class="hint small">Plus haut : moins de petites taches, donc moins de fils à couper.</span>
+        </div>
         <div class="field" data-adv>
           <label for="cleanup">Nettoyage des petits détails <output id="cleanupOut">30</output></label>
           <input type="range" id="cleanup" min="0" max="400" step="5" value="30" />
@@ -206,6 +212,7 @@
         </div>
         <div class="hoop-status" id="hoopStatus"></div>
         <button class="btn small ghost full" id="btnFitHoop" hidden>Ajuster au cadre</button>
+        <button class="btn small ghost full" id="btnSplit" hidden>✂ Broder en plusieurs fois</button>
       </section>
     </aside>
 
@@ -269,6 +276,14 @@
           <div>
             <p class="empty-title">Importez une image pour commencer</p>
             <p>Logos, dessins, textes : les images aux couleurs franches et aux contours nets donnent les meilleurs résultats.</p>
+            <div class="draft-card" id="draftCard" hidden>
+              <img id="draftThumb" alt="" />
+              <div><b>Reprendre le travail en cours ?</b><small id="draftInfo"></small></div>
+              <div class="draft-actions">
+                <button type="button" class="btn small primary" id="draftResume">Reprendre</button>
+                <button type="button" class="btn small ghost" id="draftDismiss">Non merci</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="busy" id="busy" hidden><span class="spinner"></span> <span id="busyLabel">Calcul…</span><span class="busy-track"><span class="busy-bar" id="busyBar"></span></span></div>
@@ -415,9 +430,23 @@
         <input type="color" id="textColor" value="#1d1a16" />
       </div>
     </div>
+    <div class="row2">
+      <div class="field">
+        <label for="textShape">Forme</label>
+        <select id="textShape">
+          <option value="straight">Droit</option>
+          <option value="arc">En arc (suit le motif)</option>
+        </select>
+      </div>
+      <div class="field" id="textCurveField" hidden>
+        <label for="textCurve">Courbure <output id="textCurveOut">140</output>°</label>
+        <input type="range" id="textCurve" min="40" max="300" step="10" value="140" />
+      </div>
+    </div>
     <p class="hint small">Les lettres de moins de 5 mm de haut se brodent mal. Les lettres fines passent en satin automatiquement.</p>
     <canvas id="textPreview" class="text-preview" width="600" height="220"></canvas>
     <div class="crop-actions">
+      <button type="button" class="btn ghost" id="textSeries">Prénoms en série…</button>
       <button type="button" class="btn ghost" id="textNew">Nouveau motif texte seul</button>
       <button type="button" class="btn primary" id="textAdd">Ajouter au motif</button>
     </div>
@@ -469,6 +498,55 @@
     </div>
   </dialog>
 
+  <!-- Prénoms en série -->
+  <dialog id="seriesDialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Prénoms en série</h2>
+      <button class="btn ghost small" id="seriesClose" aria-label="Fermer">✕</button>
+    </div>
+    <p class="hint">Un fichier par prénom, avec la police, la taille, la couleur et la forme choisies dans « Texte ». Pratique pour une classe, un club ou des cadeaux.</p>
+    <div class="field">
+      <label for="seriesNames">Prénoms (un par ligne, ou séparés par des virgules)</label>
+      <textarea id="seriesNames" rows="5" maxlength="4000" placeholder="Léa&#10;Tom&#10;Inès"></textarea>
+    </div>
+    <div class="field">
+      <label for="seriesMode">Contenu de chaque fichier</label>
+      <select id="seriesMode">
+        <option value="with">Le motif actuel + le prénom</option>
+        <option value="alone">Le prénom seul</option>
+      </select>
+    </div>
+    <ol class="split-list" id="seriesList"></ol>
+    <div class="crop-actions">
+      <button type="button" class="btn primary" id="seriesGo">Créer les fichiers (.zip)</button>
+    </div>
+  </dialog>
+
+  <!-- Grand motif en plusieurs fois -->
+  <dialog id="splitDialog" class="dialog wide">
+    <div class="dialog-head">
+      <h2>Grand motif en plusieurs fois</h2>
+      <button class="btn ghost small" id="splitClose" aria-label="Fermer">✕</button>
+    </div>
+    <p class="hint" id="splitIntro"></p>
+    <canvas id="splitCanvas" class="split-canvas" aria-label="Découpe du motif"></canvas>
+    <ol class="split-list" id="splitList"></ol>
+    <details class="split-help">
+      <summary>Comment faire, pas à pas</summary>
+      <ol>
+        <li>Imprimez le <b>plan</b> à 100 % et posez-le sur le tissu pour placer le motif entier.</li>
+        <li>Encadrez le tissu pour le <b>morceau 1</b> (aidez-vous de son gabarit) et brodez-le. À la fin, la machine brode de petites <b>croix de repère</b> (fil de bâti ou fil soluble conseillé).</li>
+        <li>Ré-encadrez le tissu pour le morceau suivant : son gabarit montre les mêmes croix, posez-les sur les croix déjà brodées.</li>
+        <li>Le morceau suivant commence par re-broder ces croix : si l'aiguille tombe pile dessus, tout est aligné. Sinon, déplacez le motif sur la machine avant de continuer.</li>
+        <li>À la fin, retirez les fils des croix.</li>
+      </ol>
+    </details>
+    <div class="crop-actions">
+      <button type="button" class="btn ghost" id="splitPlan">Plan à imprimer</button>
+      <button type="button" class="btn primary" id="splitZip">⬇ Tout télécharger (.zip)</button>
+    </div>
+  </dialog>
+
   <!-- Mode atelier -->
   <div class="atelier" id="atelier" hidden role="dialog" aria-modal="true" aria-label="Mode atelier">
     <div class="atelier-head">
@@ -504,8 +582,39 @@
       <h2>Modèles prêts à broder</h2>
       <button class="btn ghost small" id="templatesClose" aria-label="Fermer">✕</button>
     </div>
-    <p class="hint">Choisissez un motif pour essayer, puis changez les couleurs ou ajoutez un prénom.</p>
+    <p class="hint">Choisissez un motif pour essayer, puis changez les couleurs ou ajoutez un prénom. La taille est déjà réglée pour votre cadre.</p>
+    <div class="tpl-cats" id="tplCats" role="group" aria-label="Catégories"></div>
     <div class="template-grid" id="templateGrid"></div>
+    <details class="monogram" id="monogram">
+      <summary>Lettre décorée (initiale, monogramme)</summary>
+      <div class="row2">
+        <div class="field">
+          <label for="monoText">Lettre(s)</label>
+          <input type="text" id="monoText" maxlength="3" value="L" />
+        </div>
+        <div class="field">
+          <label for="monoFrame">Décor</label>
+          <select id="monoFrame">
+            <option value="laurier">Couronne de laurier</option>
+            <option value="cercle">Cercle</option>
+            <option value="coeur">Cœur</option>
+            <option value="fleurs">Fleurs</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="monoFont">Police</label>
+          <select id="monoFont"></select>
+        </div>
+        <div class="field">
+          <label>Couleurs</label>
+          <span class="mono-colors"><input type="color" id="monoColor" value="#1f3a5f" aria-label="Couleur de la lettre" /><input type="color" id="monoColor2" value="#2e933c" aria-label="Couleur du décor" /></span>
+        </div>
+      </div>
+      <canvas id="monoPreview" class="mono-preview" width="400" height="400"></canvas>
+      <div class="crop-actions"><button type="button" class="btn primary" id="monoGo">Utiliser cette lettre</button></div>
+    </details>
   </dialog>
 
   <!-- Mes bobines -->

@@ -317,13 +317,16 @@ export function layerRuns(loops, cfg) {
     // Satin automatique : les formes étroites en satin (angle propre à chaque
     // forme), les grandes surfaces en remplissage.
     const runs = [];
-    for (const region of groupRegions(loops)) {
+    groupRegions(loops).forEach((region, g) => {
       const w = regionWidth(region);
       const type = w < 0.6 ? "running" : w <= AUTO_SATIN_MAX_WIDTH ? "satin" : "fill";
       const sub = { ...c, type, angle: type === "satin" ? null : c.angle };
       if (type === "satin") sub.density = Math.min(c.density, 0.4);
-      runs.push(...layerRuns(region.loops, sub));
-    }
+      for (const r of layerRuns(region.loops, sub)) {
+        r.g = g; // numéro de forme : l'ordre des formes est choisi à l'assemblage
+        runs.push(r);
+      }
+    });
     return runs;
   }
   const angle = effectiveAngle(loops, c);
@@ -453,6 +456,39 @@ function splitPath(from, pts, step) {
 }
 
 /**
+ * Ordre des formes d'un calque : toujours la plus proche de l'aiguille.
+ * Les runs portant le même numéro de forme (`run.g`) restent ensemble et dans
+ * leur ordre (sous-couche puis dessus).
+ */
+function orderGroups(runs, start) {
+  if (!runs.some((r) => r.g !== undefined)) return runs;
+  const groups = new Map();
+  for (const r of runs) {
+    const k = r.g ?? `seul${groups.size}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  const left = [...groups.values()];
+  const out = [];
+  let pos = start;
+  while (left.length) {
+    let bi = 0;
+    if (pos) {
+      let bd = Infinity;
+      left.forEach((g, i) => {
+        const d = dist(pos, g[0][0]);
+        if (d < bd) (bd = d), (bi = i);
+      });
+    }
+    const [g] = left.splice(bi, 1);
+    out.push(...g);
+    const last = g[g.length - 1];
+    pos = last[last.length - 1];
+  }
+  return out;
+}
+
+/**
  * Assemble tous les calques en un motif machine.
  * @param {{color:string,name:string,runs:number[][][]}[]} layers  runs en mm
  * @returns {{stitches:number[][], threads:{color:string,name:string}[], origin:number[], stats:object}}
@@ -488,11 +524,12 @@ export function buildPattern(layers, { tieStitches = true, trimDistance = 3, max
     threads.push({ color: layer.color, name: layer.name });
     let count = 0;
     let length = 0;
-    runs.forEach((run, ri) => {
+    orderGroups(runs, cur).forEach((run, ri) => {
       let needJump = ri === 0 || !cur || dist(cur, run[0]) > trimDistance;
-      if (needJump && ri > 0 && cur && travel && layer.loops) {
-        // Déplacement cousu à l'intérieur de la forme plutôt qu'une coupe.
-        const path = travelPath(cur, run[0], layer.loops);
+      if (needJump && ri > 0 && cur && travel && (layer.loops || layer.travel)) {
+        // Déplacement cousu à l'intérieur de la forme (ou sous les couleurs
+        // suivantes) plutôt qu'une coupe.
+        const path = layer.travel?.(cur, run[0]) || (layer.loops && travelPath(cur, run[0], layer.loops));
         if (path) {
           for (const q of splitPath(cur, path, 2.5)) {
             length += dist(cur, q);
@@ -679,4 +716,26 @@ export function pathRuns(points, { stitchLength = 2.5, closed = false, triple = 
   }
   const run = triple ? pts.slice(0, 1).concat(...pts.slice(1).map((p, i) => [p, pts[i], p])) : pts;
   return [dedupe(run, 0.3)].filter((r) => r.length > 1);
+}
+
+/**
+ * Assemble plusieurs motifs déjà prêts (ex. un dessin + un prénom) en un seul,
+ * avec un changement de fil entre chaque. dx, dy en 1/10 mm.
+ */
+export function combinePatterns(parts) {
+  const out = [];
+  const threads = [];
+  for (const { pattern, dx = 0, dy = 0 } of parts) {
+    if (!pattern?.stitches.length) continue;
+    if (out.length) {
+      const last = out[out.length - 1];
+      if (last[2] !== TRIM) out.push([last[0], last[1], TRIM]);
+      out.push([last[0], last[1], COLOR_CHANGE]);
+    }
+    for (const [x, y, c] of pattern.stitches) if (c !== END) out.push([x + dx, y + dy, c]);
+    threads.push(...pattern.threads);
+  }
+  out.push([...(out[out.length - 1] || [0, 0]).slice(0, 2), END]);
+  const stitches = scalePattern(out, 1);
+  return { stitches, threads, origin: [0, 0], stats: patternStats(stitches, threads), layerIds: [], steps: [] };
 }

@@ -29,7 +29,7 @@ const LIVING = new Set([3, 8, 10, 12, 13, 15, 17]);
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("délai dépassé")), ms))]);
 
 /** Masque du sujet par l'IA (1 = garder), ou null si rien de net n'est trouvé. */
-async function aiMask(canvas) {
+async function aiMask(canvas, rgba) {
   const seg = await withTimeout(loadSegmenter(), 25000);
   const res = seg.segment(canvas);
   const cat = res.categoryMask;
@@ -41,18 +41,115 @@ async function aiMask(canvas) {
   let living = 0;
   for (const c of data) if (LIVING.has(c)) living++;
   const keep = living > data.length * 0.01 ? (c) => LIVING.has(c) : (c) => c !== 0;
-  const mask = new Uint8Array(canvas.width * canvas.height);
-  // Remise à la taille de l'image (au plus proche).
-  for (let y = 0; y < canvas.height; y++) {
-    const sy = Math.min(h - 1, Math.floor((y * h) / canvas.height));
-    for (let x = 0; x < canvas.width; x++) {
-      const sx = Math.min(w - 1, Math.floor((x * w) / canvas.width));
-      mask[y * canvas.width + x] = keep(data[sy * w + sx]) ? 1 : 0;
-    }
-  }
+  const low = new Float32Array(w * h);
+  for (let i = 0; i < low.length; i++) low[i] = keep(data[i]) ? 1 : 0;
   res.close?.();
+  const mask = refineEdges(low, w, h, rgba, canvas.width, canvas.height);
   const cover = mask.reduce((s, v) => s + v, 0) / mask.length;
   return cover > 0.01 && cover < 0.97 ? mask : null;
+}
+
+/** Flou 3x3 (en place, renvoie une copie). */
+function blur3(a, w, h) {
+  const out = new Float32Array(a.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w) continue;
+          s += a[yy * w + xx];
+          n++;
+        }
+      }
+      out[y * w + x] = s / n;
+    }
+  }
+  return out;
+}
+
+/**
+ * Le modèle travaille en basse résolution (≈ 257 px) : ses bords sont en
+ * escalier. On agrandit son masque en douceur, puis, dans la bande du bord,
+ * chaque pixel rejoint le sujet ou le fond selon sa couleur, comparée aux
+ * couleurs sûres du voisinage.
+ */
+function refineEdges(low, lw, lh, rgba, W, H) {
+  const soft = blur3(blur3(low, lw, lh), lw, lh);
+  const s = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const fy = Math.min(lh - 1, Math.max(0, ((y + 0.5) * lh) / H - 0.5));
+    const y0 = Math.floor(fy);
+    const y1 = Math.min(lh - 1, y0 + 1);
+    const ty = fy - y0;
+    for (let x = 0; x < W; x++) {
+      const fx = Math.min(lw - 1, Math.max(0, ((x + 0.5) * lw) / W - 0.5));
+      const x0 = Math.floor(fx);
+      const x1 = Math.min(lw - 1, x0 + 1);
+      const tx = fx - x0;
+      const top = soft[y0 * lw + x0] * (1 - tx) + soft[y0 * lw + x1] * tx;
+      const bot = soft[y1 * lw + x0] * (1 - tx) + soft[y1 * lw + x1] * tx;
+      s[y * W + x] = top * (1 - ty) + bot * ty;
+    }
+  }
+  // Couleurs « sûres » (loin du bord) : sommes cumulées pour des moyennes locales.
+  const IW = W + 1;
+  const n = IW * (H + 1);
+  const sums = [0, 1].map(() => [new Float64Array(n), new Float64Array(n), new Float64Array(n), new Float64Array(n)]);
+  for (let y = 0; y < H; y++) {
+    const row = [0, 1].map(() => [0, 0, 0, 0]);
+    for (let x = 0; x < W; x++) {
+      const p = y * W + x;
+      const sure = s[p] > 0.97 ? 1 : s[p] < 0.03 && rgba[p * 4 + 3] > 127 ? 0 : -1;
+      if (sure >= 0) {
+        const r = row[sure];
+        r[0]++;
+        r[1] += rgba[p * 4];
+        r[2] += rgba[p * 4 + 1];
+        r[3] += rgba[p * 4 + 2];
+      }
+      const k = (y + 1) * IW + x + 1;
+      for (let f = 0; f < 2; f++) for (let c = 0; c < 4; c++) sums[f][c][k] = sums[f][c][k - IW] + row[f][c];
+    }
+  }
+  const R = Math.max(6, Math.round((3 * W) / lw));
+  const mask = new Uint8Array(W * H);
+  const mean = (f, x0, y0, x1, y1) => {
+    const S = sums[f];
+    const get = (c) => S[c][y1 * IW + x1] - S[c][y0 * IW + x1] - S[c][y1 * IW + x0] + S[c][y0 * IW + x0];
+    const cnt = get(0);
+    return cnt < 4 ? null : [get(1) / cnt, get(2) / cnt, get(3) / cnt];
+  };
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const p = y * W + x;
+      const v = s[p];
+      if (v >= 0.97 || v <= 0.03) {
+        mask[p] = v >= 0.5 ? 1 : 0;
+        continue;
+      }
+      const x0 = Math.max(0, x - R);
+      const y0 = Math.max(0, y - R);
+      const x1 = Math.min(W, x + R + 1);
+      const y1 = Math.min(H, y + R + 1);
+      const fg = mean(1, x0, y0, x1, y1);
+      const bg = mean(0, x0, y0, x1, y1);
+      if (!fg || !bg) {
+        mask[p] = v >= 0.5 ? 1 : 0;
+        continue;
+      }
+      const i = p * 4;
+      const dF = (rgba[i] - fg[0]) ** 2 + (rgba[i + 1] - fg[1]) ** 2 + (rgba[i + 2] - fg[2]) ** 2;
+      const dB = (rgba[i] - bg[0]) ** 2 + (rgba[i + 1] - bg[1]) ** 2 + (rgba[i + 2] - bg[2]) ** 2;
+      const byColor = dF + dB > 0 ? dB / (dF + dB) : 0.5;
+      mask[p] = 0.35 * v + 0.65 * byColor >= 0.5 ? 1 : 0;
+    }
+  }
+  return mask;
 }
 
 /** Masque du sujet par les couleurs du bord (1 = garder). */
@@ -187,7 +284,7 @@ export async function findSubject(canvas, rgba) {
   let mask = null;
   let method = "ia";
   try {
-    mask = await aiMask(canvas);
+    mask = await aiMask(canvas, rgba);
   } catch (e) {
     console.warn("Détourage IA indisponible :", e);
   }

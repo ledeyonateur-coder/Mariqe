@@ -31,6 +31,7 @@ export const getProject = (id) => tx("readonly", (s) => s.get(id));
 export async function listProjects() {
   const all = await tx("readonly", (s) => s.getAll());
   return (all || [])
+    .filter((p) => p.id !== "__brouillon") // travail en cours gardé automatiquement
     .map(({ id, name, updatedAt, thumb, widthMm, heightMm, stitchCount }) => ({ id, name, updatedAt, thumb, widthMm, heightMm, stitchCount }))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }

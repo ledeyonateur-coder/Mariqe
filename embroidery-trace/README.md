@@ -62,26 +62,27 @@ différente, remplacez-la dans ces fichiers.
 
 | Étape | Fonctions |
 | --- | --- |
-| Texte | prénoms et mots (plusieurs polices), hauteur en mm, ajoutés sous / sur / au centre du motif ou en motif texte seul |
+| Texte | prénoms et mots (plusieurs polices), hauteur en mm, ajoutés sous / sur / au centre du motif ou en motif texte seul ; **texte en arc** qui épouse le motif (arche au-dessus, sourire en dessous) ; **prénoms en série** : une liste de prénoms → un fichier machine par prénom (seul ou avec le motif), dans un .zip |
 | Fichiers de broderie | ouvrir un DST, EXP, JEF, PES ou VP3 existant pour le voir, le redimensionner, changer ses couleurs ou le convertir |
 | Import | PNG, JPG, SVG, WEBP, GIF, BMP — glisser-déposer, clic ou Ctrl+V ; **recadrage** à l'import (format libre, carré, format du cadre, rotation) et bouton « Recadrer » ; exemple intégré (`app.html?exemple`) |
 | Type de broderie | Remplie, **contours seulement** (un contour par couleur) ou contours d'un seul fil (couleur au choix, trait épais en option) |
-| Couleurs | 2 à 16 fils (k-means), fond retiré automatiquement (les blancs *intérieurs* restent brodés), nettoyage des îlots, lissage des bords, arrondi et simplification des contours |
-| Points | **sélecteur visuel du type de point** pour tout le motif (Auto, Remplissage, Satin, Point droit, **Appliqué** en 3 passages), **satin qui suit les courbes** (ligne médiane de la forme), **déplacements cousus à l'intérieur des formes** au lieu de sauts + coupes, puis par calque : **Auto** (satin pour les formes étroites, remplissage pour les surfaces), Remplissage tatami, Satin, Point droit, Ignorer ; angle (ou auto), densité, longueur de point, compensation d'étirement, sous-couche, contour, point triple ; points d'arrêt et coupes de fil automatiques |
+| Couleurs | style **Illustration** pour les photos (filtre de Kuwahara : grands aplats propres), **petits détails supprimés en mm²** selon la taille brodée (moins de taches et de fils à couper ; les textes gardent leurs accents), 2 à 16 fils (k-means), fond retiré automatiquement (les blancs *intérieurs* restent brodés), nettoyage des îlots, lissage des bords, arrondi et simplification des contours |
+| Points | **sélecteur visuel du type de point** pour tout le motif (Auto, Remplissage, Satin, Point droit, **Appliqué** en 3 passages), **satin qui suit les courbes** (ligne médiane de la forme), **déplacements cousus à l'intérieur des formes ou cachés sous les couleurs suivantes** (chemin le plus court sur une grille, A*) au lieu de sauts + coupes, formes d'une même couleur enchaînées de la plus proche à la plus proche, puis par calque : **Auto** (satin pour les formes étroites, remplissage pour les surfaces), Remplissage tatami, Satin, Point droit, Ignorer ; angle (ou auto), densité, longueur de point, compensation d'étirement, sous-couche, contour, point triple ; points d'arrêt et coupes de fil automatiques |
 | Édition manuelle | pinceau, gomme, pot de peinture, pipette, taille du pinceau, nouveau calque, fusion de calques, suppression, ordre de broderie, couleur libre ou nuancier Brother, masquer ; annuler / rétablir (Ctrl+Z / Ctrl+Maj+Z) |
 | Aperçu | vues Image / Couleurs / Vecteurs / Points, zoom et déplacement, rendu réaliste du fil sur la couleur du tissu, sauts affichables, **simulation animée** de la broderie |
 | Tissu | préréglages coton, jean, t-shirt, éponge, casquette, tissu fin (densité, compensation, sous-couche) + conseil de stabilisateur |
 | Photo | luminosité, contraste, saturation ; baguette pour retirer une zone (fond) d'un clic ; **✨ Retirer le fond** automatique : une IA locale (MediaPipe DeepLab v3, dans `vendor/`) garde la personne ou l'animal, sinon détourage par les couleurs du bord (fonds unis) — tout se passe dans le navigateur |
 | Espacement | **espacement entre les fils** et longueur des points pour tout le motif (puis réglables calque par calque) ; longueur des points du contour en mode contours |
 | Fichier | type de fichier au choix (EXP, PES, JEF, DST, VP3), format recommandé selon la machine |
+| Grand motif | **broder en plusieurs fois** quand le motif dépasse le cadre : découpe en morceaux (jusqu'à 9), croix de repère brodées pour aligner, un fichier et un gabarit par morceau, plan général à imprimer, tout en .zip |
 | Taille | **barre de taille sous l'aperçu** (5 / 7 / 10 / 15 cm, max du cadre, curseur) ; largeur / hauteur en mm, cadres 4×4 à 9,5×14, alerte si le motif dépasse, bouton « Ajuster au cadre » |
 | Export | **DST, PES, JEF, EXP, VP3**, SVG en calques (Inkscape / Ink/Stitch), PNG d'aperçu, fiche couleurs imprimable (fils Brother + Janome, points, métrage), ZIP de tout |
-| Projet | **Mes projets** : sauvegarde dans le navigateur (IndexedDB) avec vignette ; téléchargement / import `.filtrace.json` |
+| Projet | **Mes projets** : sauvegarde dans le navigateur (IndexedDB) avec vignette ; téléchargement / import `.filtrace.json` ; **brouillon automatique** : le travail en cours est gardé tout seul et proposé à la réouverture |
 | Guide | ordre des fils étape par étape, fils à couper par couleur, consignes d'appliqué ; **🪡 Mode atelier** : plein écran à côté de la machine, une couleur à la fois en très grand (références Brother / Janome / Husqvarna, fils à couper), boutons géants et flèches du clavier, l'écran reste allumé |
 | Gabarit | **gabarit à imprimer en taille réelle** (export « Gabarit ») : motif, zone du cadre, croix du centre graduée, flèche du haut et carré de contrôle de 2 cm ; découpé en pages A4 si besoin |
 | Nuanciers | Brother, Janome, Husqvarna Viking (Madeira / Gunold non inclus : pas de table de couleurs fiable) |
 | Dessin (comme Paint) | **✏ Dessiner** : crayon, ligne, rectangle, cercle, choisir / effacer un trait ; pour chaque trait couleur et **type de fil** (point droit, triple, satin avec largeur, remplissage des formes fermées), modifiables ensuite ; **Calquer la photo** (la photo sert de modèle, seuls les traits sont brodés) ; **Dessin libre** sur page blanche |
-| Expérience | **mode simple** (3 étapes) / avancé, **visite guidée**, **9 modèles**, **mode sombre**, **avant / après**, curseurs appliqués en direct, calculs dans un **Worker** avec barre de progression, annuler / rétablir sur tous les réglages |
+| Expérience | **mode simple** (3 étapes) / avancé, **visite guidée**, **36 modèles** classés (animaux, fleurs & nature, cœurs & fêtes, petits pour le cadre 4 × 4) avec la taille déjà réglée, **lettre décorée** (initiale dans un laurier, cercle, cœur ou fleurs), **mode sombre**, **avant / après**, curseurs appliqués en direct, calculs dans un **Worker** avec barre de progression, annuler / rétablir sur tous les réglages |
 | Contrôle | **alertes** (points trop longs, zones trop denses, texte trop petit, hors cadre), **Mes bobines** (n'utiliser que ses fils), style **dessin au trait** pour les photos, outil **Déplacer**, textes modifiables |
 | Langues | français et **anglais** (bouton EN/FR, `?lang=en`) |
 | Téléphone | onglets Aperçu / Réglages / Calques / Fichier, **zoom à deux doigts** |
@@ -130,7 +131,9 @@ js/core/stitch.js        remplissage tatami, satin, point droit, appliqué, dép
 js/core/satin.js         satin en colonne (squelette) et bordure satin
 js/formats/readers.js    lecture DST / EXP / JEF / PES / VP3
 js/fabrics.js, photo.js, text.js, projects.js   tissus, retouche, texte, Mes projets
-js/bgremove.js           retirer le fond (IA locale, sinon couleurs du bord)
+js/bgremove.js           retirer le fond (IA locale, bords affinés à pleine résolution, sinon couleurs du bord)
+js/core/underpath.js     déplacements cachés (grille, A*) : moins de sauts et de fils à couper
+js/core/split.js         grand motif en plusieurs fois (découpe, croix de repère)
 vendor/mediapipe/        moteur et modèle de segmentation (Apache-2.0), chargés à la demande
 js/core/pipeline.js      enchaînement image -> calques -> points
 js/core/threads.js       nuanciers Brother (PEC) et Janome (JEF)
